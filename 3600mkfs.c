@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "3600fs.h"
 #include "disk.h"
@@ -53,7 +54,7 @@ typedef struct dirent_s {
   struct timespec access_time;
   struct timespec modify_time;
   struct timespec create_time;
-  char name[128]; // arbitrary # for now, will need to change later
+  char name[452]; // BLOCKSIZE - sizeof(rest of struct)
 } dirent;
 
 typedef struct fatent_s {
@@ -69,6 +70,44 @@ void myformat(int size) {
   /* 3600: FILL IN CODE HERE.  YOU SHOULD INITIALIZE ANY ON-DISK
            STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
            A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
+  
+  ////////////////////////
+  // Initialize the VCB //
+  ////////////////////////
+  vcb myvcb;
+  myvcb.blocksize = BLOCKSIZE;
+  myvcb.de_start = 1;
+  myvcb.de_length = ceil(size / 2); //TODO: Need to change this to be more efficient later
+  myvcb.fat_start = myvcb.de_length + 1;
+
+  int remaining = size - 1 - myvcb.de_length;
+  int datablock_length = floor(128 * remaining / 129);
+  
+  myvcb.fat_length = remaining - datablock_length;
+  myvcb.db_start = myvcb.fat_start + myvcb.fat_length;
+  myvcb.user = getuid();
+  myvcb.group = getgid();
+  myvcb.mode = 0777;
+  
+  // Get the current time using the system's clock
+  struct timespec tmp;
+  clock_gettime(CLOCK_REALTIME, &tmp);
+
+  struct timespec access_time = tmp;
+  struct timespec modify_time = tmp;
+  struct timespec create_time = tmp;
+
+  /////////////////////////
+  // Initialize a Dirent //
+  /////////////////////////
+  dirent de_init;
+  de_init.valid = 0;
+
+  //////////////////////
+  // Initialize a FAT //
+  //////////////////////
+  fatent fe_init;
+  fe_init.used = 0;
 
   /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
            WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
