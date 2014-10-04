@@ -1,0 +1,539 @@
+#!/usr/bin/perl
+use strict;
+use POSIX qw(ceil);
+use File::Temp qw(tempdir);
+use Fcntl qw(S_IMODE);
+
+my $WIDTH = 60;
+my $PASS = 2;
+my $PARTIAL = 1;
+my $FAIL = 0;
+my $DISK = "MYDISK";
+my $DIR = "fuse-dir2";
+
+my $MKFS = "./3600mkfs";
+my $FS = "./3600fs";
+
+my $current = 0;
+my $child = -1;
+my $childerror = 0;
+
+$DIR = tempdir( "3600fs.XXXXXX", DIR => "/tmp", CLEANUP => 1);
+if (! -e $DIR) { mkdir($DIR); }
+chmod(0755, $DIR);
+
+my $FILE1 = "$DIR/test1.txt";
+my $FILE2 = "$DIR/test2.txt";
+my $FILE3 = "$DIR/test3.txt";
+my $FILE4 = "$DIR/test4.txt";
+
+my $SUBDIR = "$DIR/test";
+my $SUBFILE = "$SUBDIR/test1.txt";
+my $SUBSUBDIR = "$SUBDIR/test";
+my $SUBSUBFILE = "$SUBSUBDIR/test1.txt";
+
+my $smdata = "abcde12345";
+my $lgdata = $smdata;
+$lgdata =~ s/^(.*)/$smdata x 200 . $1/mge;
+my $vlgdata = $smdata;
+$vlgdata =~ s/^(.*)/$smdata x 20000 . $1/mge;
+
+my $LONGFILE = "$DIR/abcdefghijklmnopqrstuvwxyzab";
+
+if (! (-e $MKFS)) { error("Could not find $MKFS\n"); }
+if (! (-e $FS)) { error("Could not find $FS\n"); }
+
+startSection("Milestone 1 Tests");
+
+startTest("Make small disk", 2);
+execute("$MKFS 1000");
+if (! -e $DISK) {
+  endTest($FAIL, "Disk file did not exist");
+} else {
+  my $result = `xxd -p $DISK | egrep -v "^0*\$"`;
+  if ($result) {
+    endTest($PASS, "");
+  } else {
+    endTest($FAIL, "Disk had no contents");
+  }
+}
+unlink($DISK);
+
+startTest("Make large disk", 3);
+execute("./3600mkfs 100000");
+if (! -e $DISK) {
+  endTest($FAIL, "Disk file did not exist");
+} else {
+  my $result = `xxd -p $DISK | egrep -v "^0*\$"`;
+  if ($result) {
+    endTest($PASS, "");
+  } else {
+    endTest($FAIL, "Disk had no contents");
+  }
+}
+unlink($DISK);
+
+startSection("Milestone 2 Tests");
+execute("$MKFS 100000");
+runFS();
+
+startTest("Create file", 10);
+my $res = writeFile($FILE1, "");
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  endTest((-e $FILE1 ? $PASS : $FAIL), "No file existed");
+}
+
+startTest("Create second file", 5);
+$res = writeFile($FILE2, "");
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  endTest((-e $FILE2 ? $PASS : $FAIL), "No file existed");
+}
+
+startTest("Create third file", 5);
+$res = writeFile($FILE3, "");
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  endTest((-e $FILE3 ? $PASS : $FAIL), "No file existed");
+}
+
+startTest("Delete file", 5);
+$res = deleteFile($FILE2, "");
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  endTest((-e $FILE2 ? $FAIL : $PASS), "File still existed");
+}
+
+stopFS();
+runFS();
+
+startTest("Files persist on disk", 10);
+endTest((-e $FILE1 ? (-e $FILE3 ? $PASS : $PARTIAL) : (-e $FILE3 ? $PARTIAL : $FAIL)), "Files did not reappear after remount");
+
+stopFS();
+unlink($DISK);
+execute("$MKFS 100000");
+runFS();
+
+startTest("Creating 100 files", 5);
+my $done = 0;
+for (my $i=0; $i<100 && (! $done); $i++) {
+  $res = writeFile("$DIR/file$i", "");
+  if (length($res) > 0) {
+    endTest($FAIL, $res);
+    $done = 1;
+  }
+}
+if (! $done) {
+  endTest($PASS);
+}
+
+startTest("Reading directory with 100 files", 5);
+opendir(my $dh, $DIR);
+my @files = readdir($dh);
+closedir($dh);
+my $err = "";
+my @h = ();
+foreach my $f (@files) {
+  if ((! $done) && ($f =~ m|^file([0-9]+)$|)) { 
+    $h[$1] = 1;
+  } elsif (! ($f =~ m|^\.*$|)) {
+    $err .= "    Got unexpected file '$f'.\n";
+    $done = 1;
+  }
+}
+for (my $i=0; $i<100; $i++) {
+  if ((! $h[$i]) && (! $done)) { $err .= "    Could not find file 'file$i'.\n"; $done = 1; }
+}
+if ($done) {
+  endTest($FAIL, $err);
+} else {
+  endTest($PASS);
+}
+
+startTest("Deleting 100 files", 10);
+$done = 0;
+for (my $i=0; $i<100 && (! $done); $i++) {
+  if (! -e "$DIR/file$i") {
+    endTest($FAIL, "File 'file$i' did not exist");
+    $done = 1;
+  } else {
+    deleteFile("$DIR/file$i");
+  }
+}
+for (my $i=0; $i<100 && (! $done); $i++) {
+  if (-e "$DIR/file$i") {
+    endTest($FAIL, "File 'file$i' still existed after deletion");
+    $done = 1;
+  }
+}
+if (! $done) {
+  endTest($PASS);
+}
+
+stopFS();
+runFS();
+
+startTest("Files not present after disconnect", 10);
+$done = 0;
+for (my $i=0; $i<100 && (! $done); $i++) {
+  if (-e "$DIR/file$i") {
+    endTest($FAIL, "File 'file$i' still existed after disconnect/reconnect.");
+    $done = 1;
+  }
+}
+if (! $done) {
+  endTest($PASS);
+}
+
+stopFS();
+unlink($DISK);
+
+startSection("Final tests");
+execute("$MKFS 100000");
+runFS();
+
+startTest("Create/delete/recreate cycles", 10);
+$res = writeFile($FILE1, "");
+$res = writeFile($FILE2, "");
+$res = deleteFile($FILE2, "");
+$res = writeFile($FILE3, "");
+$res = deleteFile($FILE1, "");
+$res = writeFile($FILE3, "");
+$res = writeFile($FILE4, "");
+$res = deleteFile($FILE4, "");
+$res = deleteFile($FILE3, "");
+$res = writeFile($FILE1, "");
+$res = writeFile($FILE2, "");
+$res = deleteFile($FILE2, "");
+$res = writeFile($FILE3, "");
+$res = deleteFile($FILE1, "");
+$res = writeFile($FILE3, "");
+$res = writeFile($FILE4, "");
+$res = deleteFile($FILE4, "");
+$res = deleteFile($FILE3, "");
+$res = writeFile($FILE1, "");
+$res = writeFile($FILE2, "");
+$res = deleteFile($FILE2, "");
+$res = writeFile($FILE3, "");
+$res = deleteFile($FILE1, "");
+$res = writeFile($FILE3, "");
+$res = writeFile($FILE4, "");
+$res = deleteFile($FILE4, "");
+$res = deleteFile($FILE3, "");
+$res = writeFile($FILE1, "");
+my $exists = (-e $FILE1 ? "" : "!$FILE1 ") . (-e $FILE2 ? "$FILE2 " : "") . (-e $FILE3? "$FILE3 " : "") . (-e $FILE4 ? "$FILE4 " : "");
+
+if (length($exists) > 0) {
+  endTest($FAIL, "Files still existed: $exists");
+} else {
+  endTest($PASS);
+}
+
+stopFS();
+unlink($DISK);
+execute("$MKFS 100000");
+runFS();
+
+startTest("Reading directory", 10);
+$res = writeFile($FILE1, "");
+$res = writeFile($FILE2, "");
+$res = writeFile($FILE3, "");
+opendir(my $dh, $DIR);
+my @files = readdir($dh);
+closedir($dh);
+my $err = "";
+my @h = ();
+foreach my $f (@files) { 
+  if ($f =~ m|^test([1-3])\.txt$|) { 
+    $h[$1] = 1;
+  } elsif (! ($f =~ m|^\.*$|)) {
+    $err .= "    Got unexpected file '$f'.\n";
+  }
+}
+for (my $i=1; $i<4; $i++) {
+  if (! $h[$i]) { $err .= "    Could not find file 'test$i.txt'.\n"; }
+}
+if ($err) {
+  endTest($FAIL, $err);
+} else {
+  endTest($PASS);
+}
+
+stopFS();
+unlink($DISK);
+execute("$MKFS 100000");
+runFS();
+
+
+startTest("Small write to file", 10);
+$res = writeFile($FILE3, $smdata);
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  endTest((-e $FILE3 ? $PASS : $FAIL), "No file existed");
+}
+
+startTest("File size is correct", 5);
+my $size = -s $FILE3;
+if (length($smdata) == $size) {
+  endTest($PASS, "");
+} else {
+  endTest($FAIL, "Incorrect size (wrote " . length($smdata) . " bytes, file size $size bytes)");
+}
+
+startTest("Read previously written data", 10);
+my $cmp = readFile($FILE3);
+if ($cmp =~ m|^Error|) { 
+  endTest($FAIL, $cmp);
+} elsif ($cmp eq $smdata) {
+  endTest($PASS, "");
+} else {
+  endTest($FAIL, "Returned data did not match (wrote '$smdata', read '$cmp')");
+}
+
+startTest("Truncate file to 0", 5);
+truncateFile($FILE3, 0);
+$size = -s $FILE3;
+if (0 == $size) {
+  endTest($PASS, "");
+} else {
+  endTest($FAIL, "Incorrect size $size; truncated to 0");
+}
+
+startTest("Large write/read", 5);
+$res = writeFile($FILE4, $lgdata);
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  my $cmp = readFile($FILE4);
+  if ($cmp =~ m|^Error|) { 
+    endTest($FAIL, $cmp);
+  } elsif ($lgdata eq $cmp) {
+    endTest($PASS, "");
+  } else {
+    endTest($FAIL, "Returned data did not match (wrote length " . length($lgdata) . ", read length " . length($cmp) . ")\nActual '$lgdata' read '$cmp'");
+  }
+}
+
+startTest("Truncate file to 1024", 5);
+truncateFile($FILE4, 1024);
+$size = -s $FILE4;
+if (1024 == $size) {
+  endTest($PASS, "");
+} else {
+  endTest($FAIL, "Incorrect size $size; truncated to 1024");
+}
+
+startTest("Create long filename", 5);
+$res = writeFile($LONGFILE, "");
+if (-e $LONGFILE) {
+  endTest($PASS, "", 10);
+} else {
+  endTest($FAIL, "Could not create filename '$LONGFILE'");
+}
+
+startTest("Change permissions", 5);
+chmod 0123, $LONGFILE;
+my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = stat($LONGFILE);
+if (S_IMODE($mode) == 0123) {
+  endTest($PASS, "", 10);
+} else {
+  endTest($FAIL, "Expected permissions 0123, got " . sprintf("%04o", S_IMODE($mode)) . ".");
+}
+
+startTest("Maintain User ID/Group ID", 5);
+if (($uid == $<) && ($gid == $()) {
+  endTest($PASS, "", 10);
+} else {
+  endTest($FAIL, "Expected uid/gid of " . $< . "/" . $( . " got $uid/$gid.");
+}
+
+startTest("Maintain metadata times", 5);
+if (($atime == $mtime) && ($mtime == $ctime)) {
+  endTest($PASS, "", 10);
+} else {
+  endTest($FAIL, "Got times of $ctime/$atime/$mtime");
+}
+
+startTest("Very large write/read", 5);
+$res = writeFile($FILE4, $vlgdata);
+if (length($res) > 0) {
+  endTest($FAIL, $res);
+} else {
+  my $cmp = readFile($FILE4);
+  if ($cmp =~ m|^Error|) { 
+    endTest($FAIL, $cmp);
+  } elsif ($vlgdata eq $cmp) {
+    endTest($PASS, "");
+  } else {
+    endTest($FAIL, "Returned data did not match (wrote length " . length($vlgdata) . ", read length " . length($cmp) . ").  Actual data are in /tmp/.actual and /tmp/.expected");
+    open(F, "> /tmp/.actual"); print F $cmp; close(F);
+    open(F, "> /tmp/.expected"); print F $vlgdata; close(F);
+  }
+}
+
+stopFS();
+unlink($DISK);
+
+startSection("Extra credit");
+execute("$MKFS 100000");
+runFS();
+
+startTest("Create two-level directory", 10, 1);
+mkdir($SUBDIR);
+if (! -e $SUBDIR) {
+  endTest($FAIL, "");
+} else {
+  writeFile($SUBFILE, "");
+  endTest((-e $SUBFILE ? $PASS : $FAIL), "");
+}
+
+startTest("Create three-level directory", 5, 1);
+mkdir($SUBSUBDIR);
+if (! -e $SUBSUBDIR) {
+  endTest($FAIL, "");
+} else {
+  writeFile($SUBSUBFILE, "");
+  endTest((-e $SUBSUBFILE ? $PASS : $FAIL), "");
+}
+
+stopFS();
+unlink($DISK);
+
+sub readFile {
+  my ($file) = @_;
+  open(F, "$file");
+  if ($?) { return "Error code: $?"; }
+  my $result = <F>;
+  close(F);
+  $result =~ s/[^!-~\s]/X/g;
+  return $result;
+}
+
+sub writeFile {
+  my ($file, $data) = @_;
+  open(F, "> $file");
+  if ($?) { return "Error code: $?"; }
+  if (length($data) > 0) { print F $data; if ($?) { return "Error code: $?"; } }
+  close(F);
+  return "";
+}
+
+sub deleteFile {
+  my ($file) = @_;
+
+  if (-e "$file") { 
+    unlink($file); 
+    if ($?) { return "Error code: $?"; }
+    return "";
+  } 
+
+  return "File $file did not exist";
+}
+
+sub truncateFile {
+  my ($file, $off) = @_;
+
+  if (-e "$file") { 
+    open(F, "+< $file");
+    truncate(F, $off);
+    close(F);
+    return "";
+  } 
+
+  return "File $file did not exist";
+}
+
+sub runFS {
+  $childerror = 0;
+  if (($child = fork()) == 0) {
+    open(STDOUT, ">> fs-log.txt");
+    open(STDERR, ">> fs-log.txt");
+    print "RUNNING '$FS -s -d $DIR'\n";
+    exec("$FS", "-s", "-d", "$DIR");
+    exit(0);
+  }
+  sleep(1);
+}
+
+sub stopFS {
+  kill(2, $child);
+  $child = -1;
+  sleep(1);
+}
+
+sub startSection {
+  my ($name) = @_;
+  print "\U\n$name\n";
+}
+
+sub startTest {
+  my ($name) = @_;
+  print pad("  $name", 36) . " " . pad("", 6) . " ";
+}
+
+sub endTest {
+  my ($outcome, $notes) = @_;
+  my $current = "";
+
+  if ($outcome == $PASS) {
+    print pad("PASS", 14) . " " . pad($current, 6) . "\n";
+  } elsif ($outcome == $PARTIAL) {
+    print pad("PARTIAL FAIL", 14) . " " . pad($current, 6) . "\n";
+  } elsif ($outcome == $FAIL) {
+    print pad("FAIL", 14) . " " . pad("", 6) . "\n";
+  }
+  if ((length($notes) > 0) && ($outcome != $PASS)) {
+    print "    $notes\n";
+  }
+}
+
+sub pad {
+  my ($name, $len) = @_;
+  while (length($name) < $len) {
+    $name = "$name ";
+  }
+  if (length($name) > $len) {
+    $name = substr($name, 0, $WIDTH-25);
+  }  
+  return $name;
+}
+
+sub error {
+  my ($msg) = @_;
+  print "Error: $msg\n";
+  if ($child != -1) {
+    stopFS();
+  }
+  exit(-1);
+}
+
+sub execute {
+  my ($command) = @_;
+  `echo "COMMAND: $command" >> log.txt`;
+  if (system("$command >> log.txt 2>&1")) {
+    error("Error executing '$command'.  See log.txt for details.");
+  }
+}
+
+sub lcss (\$\$) {
+    my ($needle, $haystack) = @_;
+    ($needle, $haystack) = ($haystack, $needle)
+        if length $needle > length $haystack;
+
+    my ($longest_c, $longest) = 0;
+    for my $start (0..length $needle) {
+        for my $len ( reverse $start+1 .. length $needle) {
+            my $substr = substr($needle, $start, $len);
+            length $1 > $longest_c and ($longest_c, $longest) = (length $1, $1)
+                while $haystack =~ m[($substr)]g;
+        }
+    }
+    return $longest;
+}
