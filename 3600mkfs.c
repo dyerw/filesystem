@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "3600fs.h"
 #include "disk.h"
@@ -90,12 +91,19 @@ void myformat(int size) {
   myvcb.mode = 0777;
   
   // Get the current time using the system's clock
-  struct timespec tmp;
-  clock_gettime(CLOCK_REALTIME, &tmp);
+  struct timespec tmp_time;
+  clock_gettime(CLOCK_REALTIME, &tmp_time);
 
-  struct timespec access_time = tmp;
-  struct timespec modify_time = tmp;
-  struct timespec create_time = tmp;
+  struct timespec access_time = tmp_time;
+  struct timespec modify_time = tmp_time;
+  struct timespec create_time = tmp_time;
+
+  // Write to the disk
+  char tmpmem[BLOCKSIZE];
+  memset(tmpmem, 0, BLOCKSIZE);
+  memcpy(tmpmem, &myvcb, sizeof(vcb));
+
+  if (dwrite(0, tmpmem) < 0) { perror("Error while writing to disk"); }
 
   /////////////////////////
   // Initialize a Dirent //
@@ -103,11 +111,27 @@ void myformat(int size) {
   dirent de_init;
   de_init.valid = 0;
 
+  memset(tmpmem, 0, BLOCKSIZE);
+  memcpy(tmpmem, &de_init, sizeof(dirent));
+
+  // Write out this blank directory entry as many time as we need to
+  for (int j = myvcb.de_start; j < myvcb.de_length + myvcb.de_start; j++) {
+    if (dwrite(j, tmpmem) < 0) { perror("Error while writing to disk"); }
+  } 
+
   //////////////////////
   // Initialize a FAT //
   //////////////////////
   fatent fe_init;
   fe_init.used = 0;
+
+  memset(tmpmem, 0, BLOCKSIZE);
+  memcpy(tmpmem, &fe_init, sizeof(fatent));
+
+  // Write out fat_length  blank FAT blocks starting at fat_start
+  for (int k = myvcb.fat_start; k < myvcb.fat_length + myvcb.fat_start; k++) {
+    if (dwrite(k, tmpmem) < 0) { perror("Error while writing to disk"); }
+  }
 
   /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
            WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
@@ -117,11 +141,10 @@ void myformat(int size) {
   memset(tmp, 0, BLOCKSIZE);
 
   // now, write that to every block
-  for (int i=0; i<size; i++) 
+/*  for (int i=0; i<size; i++) 
     if (dwrite(i, tmp) < 0) 
       perror("Error while writing to disk");
-
-  // voila! we now have a disk containing all zeros
+*/
 
   // Do not touch or move this function
   dunconnect();
