@@ -38,6 +38,10 @@
 #include "3600fs.h"
 #include "disk.h"
 
+vcb* disk_vcb;
+dirent** dirents;
+fatent** fatents;
+
 /*
  * Initialize filesystem. Read in file system metadata and initialize
  * memory structures. If there are inconsistencies, now would also be
@@ -56,6 +60,46 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   /* 3600: YOU SHOULD ADD CODE HERE TO CHECK THE CONSISTENCY OF YOUR DISK
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
 
+  // Get VCB Data
+  char* vcb_data;
+  if (dread(0, vcb_data) < 0) { fprintf(stderr, "dread failed for block 0\n"); }
+
+  // Cast our data from disk into a vcb structure
+  disk_vcb = calloc(1, sizeof(vcb));
+  memcpy(disk_vcb, vcb_data, sizeof(vcb));
+
+  printf("MAGIC: %i\n", disk_vcb->magic); 
+  printf("BLOCKSIZE: %i\n", disk_vcb->blocksize); 
+  printf("DE_START: %i\n", disk_vcb->de_start); 
+  printf("DE_LENGTH: %i\n", disk_vcb->de_length); 
+  printf("FAT_START: %i\n", disk_vcb->fat_start); 
+  printf("FAT_LENGTH: %i\n", disk_vcb->fat_length); 
+  printf("DB_START: %i\n", disk_vcb->db_start); 
+
+  if (disk_vcb->magic != 666) { fprintf(stderr, "magic number mismatch\n"); exit(1); }
+ 
+  // Get Directory Entries
+  for (int i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) {
+    char* dirent_buf;
+    if (dread(i, dirent_buf) < 0) { fprintf(stderr, "dread failed\n"); }
+    dirent* tmp = calloc(1, sizeof(dirent));
+    memcpy(tmp, dirent_buf, sizeof(dirent));
+
+    dirents = realloc(dirents, (i - disk_vcb->de_start + 1) * sizeof(dirent*));
+    dirents[i - disk_vcb->de_start] = tmp;
+  }  
+
+  // Get FAT Entries
+  for (int j = disk_vcb->fat_start; j < disk_vcb->fat_start + disk_vcb->fat_length; j++) {
+    char* fat_buf;
+    if (dread(j, fat_buf) < 0) { fprinf(stderr, "dread failed\n"); }
+    fatent* fat_tmp = calloc(1, sizeof(fatent));
+    memcpy(fat_tmp, fat_buf, sizeof(fatent));
+
+    fatents = realloc(fatents, (j - disk_vcb->fat_start + 1) * sizeof(fatent*));
+    fatents[i - disk_vcb->fat_start] = fat_tmp;
+  }
+ 
   return NULL;
 }
 
