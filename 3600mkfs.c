@@ -36,6 +36,7 @@ void myformat(int size) {
   ////////////////////////
   vcb myvcb;
   myvcb.magic = 666;
+  myvcb.magic = 666; 
   myvcb.blocksize = BLOCKSIZE;
   myvcb.de_start = 1;
   myvcb.de_length = ceil(size / 2); //TODO: Need to change this to be more efficient later
