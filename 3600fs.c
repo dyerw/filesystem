@@ -92,12 +92,12 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   // Get FAT Entries
   for (int j = disk_vcb->fat_start; j < disk_vcb->fat_start + disk_vcb->fat_length; j++) {
     char* fat_buf;
-    if (dread(j, fat_buf) < 0) { fprinf(stderr, "dread failed\n"); }
+    if (dread(j, fat_buf) < 0) { fprintf(stderr, "dread failed\n"); }
     fatent* fat_tmp = calloc(1, sizeof(fatent));
     memcpy(fat_tmp, fat_buf, sizeof(fatent));
 
     fatents = realloc(fatents, (j - disk_vcb->fat_start + 1) * sizeof(fatent*));
-    fatents[i - disk_vcb->fat_start] = fat_tmp;
+    fatents[j - disk_vcb->fat_start] = fat_tmp;
   }
  
   return NULL;
