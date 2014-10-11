@@ -155,19 +155,19 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  else {
     // if (The path represents the root directory)
     if (*path == '/') { //if the first char is a '/', it is referencing the root dir
-     stbuf->st_mode  = 0777 | S_IFDIR;
+      stbuf->st_mode  = 0777 | S_IFDIR;
     } else {
       stbuf->st_mode  = dirents[i]->mode | S_IFREG; 
     }
 
-    stbuf->st_uid     = dirents[i]->user // file uid
-    stbuf->st_gid     = dirents[i]->group // file gid
-    stbuf->st_atime   = dirents[i]->access_time // access time 
-    stbuf->st_mtime   = dirents[i]->modify_time // modify time
-    stbuf->st_ctime   = dirents[i]->create_time // create time
-    stbuf->st_size    = dirents[i]->size // file size
-    stbuf->st_blocks  = ceil(dirents[i]->size / 512) // file size in blocks: TODO not sure how to get this
-                                                     // maybe like this? Can depend on what unit the size is given in
+    stbuf->st_uid     = dirents[i]->user; // file uid
+    stbuf->st_gid     = dirents[i]->group; // file gid
+    stbuf->st_atime   = dirents[i]->access_time.tv_sec; // access time 
+    stbuf->st_mtime   = dirents[i]->modify_time.tv_sec; // modify time
+    stbuf->st_ctime   = dirents[i]->create_time.tv_sec; // create time
+    stbuf->st_size    = dirents[i]->size; // file size
+    stbuf->st_blocks  = ceil(dirents[i]->size / 512); // file size in blocks: TODO not sure how to get this
+                                                      // maybe like this? Can depend on what unit the size is given in
 
     return 0;
   }
@@ -220,7 +220,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
       return -1;
     }
 
-    if 
     return 0;
 }
 
@@ -238,11 +237,11 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     }
 
     // Create a new dirent for this file 
-    dirent new_de = calloc(1, sizeof(dirent)); // maybe don't need to calloc it
+    dirent* new_de = calloc(1, sizeof(dirent)); // maybe don't need to calloc it
     new_de->valid = 1;
     new_de->mode = mode;
-    new_de->uid = geteuid();
-    new_de->gid = getegid();
+    new_de->user = geteuid();
+    new_de->group = getegid();
     // new_de->size = ???
     // new_de->first_block = ???
     struct timespec mytime;
@@ -250,10 +249,11 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     new_de->create_time = mytime;
     new_de->modify_time = mytime;
     new_de->access_time = mytime;
-    new_de->name = (path+1); // probably need to parse the path, get the actual name
-                               // Make sure this pointer math is right. It should skip right past
-                               // the "/" and start at first char of the path
-                               // Note: only works due to single-level directories
+    strcpy(new_de->name, (path + 1));
+    //new_de.name = "I'manewfile";//(path + 1); // probably need to parse the path, get the actual name
+                            // Make sure this pointer math is right. It should skip right past
+                            // the "/" and start at first char of the path
+                            // Note: only works due to single-level directories
     
     // Maybe need a call to open()???
     return 0;
@@ -309,9 +309,9 @@ static int vfs_delete(const char *path)
 
   /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-    if (file dne) {
+    /*if (file dne) {
       return -1;
-    }
+    }*/
     // remove file entry from dir
     // free data blocks used
 
