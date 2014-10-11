@@ -86,6 +86,7 @@ static void vfs_unmount (void *private_data) {
  *
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
+  // I think this is supposed to be removed? 
   fprintf(stderr, "vfs_getattr called\n");
 
   // Do not mess with this code 
@@ -94,23 +95,38 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   stbuf->st_blksize = BLOCKSIZE;
 
   /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
-  
-  /*
-  if (The path represents the root directory)
-    stbuf->st_mode  = 0777 | S_IFDIR;
-  else 
-    stbuf->st_mode  = <<file mode>> | S_IFREG;
+ 
+ int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
+ int i;
+ for (i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) { // May need diff. way to get iterations length
+   if (dirents[i]->valid = 1 && strcmp((path+1), dirents[i]->name) == 0) {
+     found = 1;
+     break;
+   }
+ }
+ 
+ if (found == 0) {
+   return -ENOENT;
+ }
+ else {
+    // if (The path represents the root directory)
+    if (*path == '/') { //if the first char is a '/', it is referencing the root dir
+     stbuf->st_mode  = 0777 | S_IFDIR;
+    } else {
+      stbuf->st_mode  = dirents[i]->mode | S_IFREG; 
+    }
 
-  stbuf->st_uid     = // file uid
-  stbuf->st_gid     = // file gid
-  stbuf->st_atime   = // access time 
-  stbuf->st_mtime   = // modify time
-  stbuf->st_ctime   = // create time
-  stbuf->st_size    = // file size
-  stbuf->st_blocks  = // file size in blocks
-    */
+    stbuf->st_uid     = dirents[i]->user // file uid
+    stbuf->st_gid     = dirents[i]->group // file gid
+    stbuf->st_atime   = dirents[i]->access_time // access time 
+    stbuf->st_mtime   = dirents[i]->modify_time // modify time
+    stbuf->st_ctime   = dirents[i]->create_time // create time
+    stbuf->st_size    = dirents[i]->size // file size
+    stbuf->st_blocks  = ceil(dirents[i]->size / 512) // file size in blocks: TODO not sure how to get this
+                                                     // maybe like this? Can depend on what unit the size is given in
 
-  return 0;
+    return 0;
+  }
 }
 
 /*
@@ -155,7 +171,12 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
+    // If the given path is not the root of the file system, throw error
+    if (strcmp(path, "/") != 0) {
+      return -1;
+    }
 
+    if 
     return 0;
 }
 
@@ -165,6 +186,32 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    
+    // If the file already exists, throw an error
+    struct stat *stbuf = NULL; 
+    if (vfs_getattr(path, stbuf) != -ENOENT) {
+       return -EEXIST;
+    }
+
+    // Create a new dirent for this file 
+    dirent new_de = calloc(1, sizeof(dirent)); // maybe don't need to calloc it
+    new_de->valid = 1;
+    new_de->mode = mode;
+    new_de->uid = geteuid();
+    new_de->gid = getegid();
+    // new_de->size = ???
+    // new_de->first_block = ???
+    struct timespec mytime;
+    clock_gettime(CLOCK_REALTIME, &mytime);
+    new_de->create_time = mytime;
+    new_de->modify_time = mytime;
+    new_de->access_time = mytime;
+    new_de->name = (path+1); // probably need to parse the path, get the actual name
+                               // Make sure this pointer math is right. It should skip right past
+                               // the "/" and start at first char of the path
+                               // Note: only works due to single-level directories
+    
+    // Maybe need a call to open()???
     return 0;
 }
 
@@ -218,6 +265,11 @@ static int vfs_delete(const char *path)
 
   /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
+    if (file dne) {
+      return -1;
+    }
+    // remove file entry from dir
+    // free data blocks used
 
     return 0;
 }
