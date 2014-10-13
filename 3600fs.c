@@ -61,12 +61,11 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
 
   // Get VCB Data
-  char* vcb_data;
+  char vcb_data[BLOCKSIZE];
   if (dread(0, vcb_data) < 0) { fprintf(stderr, "dread failed for block 0\n"); }
-
   // Cast our data from disk into a vcb structure
   disk_vcb = calloc(1, sizeof(vcb));
-  memcpy(disk_vcb, vcb_data, sizeof(vcb));
+  memcpy(disk_vcb, &vcb_data, sizeof(vcb));
 
   printf("MAGIC: %i\n", disk_vcb->magic); 
   printf("BLOCKSIZE: %i\n", disk_vcb->blocksize); 
@@ -99,7 +98,6 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     fatents = realloc(fatents, (j - disk_vcb->fat_start + 1) * sizeof(fatent*));
     fatents[j - disk_vcb->fat_start] = fat_tmp;
   }
- 
   return NULL;
 }
 
@@ -132,6 +130,10 @@ static void vfs_unmount (void *private_data) {
 static int vfs_getattr(const char *path, struct stat *stbuf) {
   // I think this is supposed to be removed? 
   fprintf(stderr, "vfs_getattr called\n");
+  
+  if (strrchr(path, '/') > path) {
+    fprintf(stderr, "Unable to get_attr on a multilevel dir");
+  }
 
   // Do not mess with this code 
   stbuf->st_nlink = 1; // hard links
@@ -151,7 +153,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  
  if (found == 0) {
    return -ENOENT;
- }
+ } 
  else {
     // if (The path represents the root directory)
     if (*path == '/') { //if the first char is a '/', it is referencing the root dir
@@ -172,23 +174,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
     return 0;
   }
 }
-
-/*
- * Given an absolute path to a directory (which may or may not end in
- * '/'), vfs_mkdir will create a new directory named dirname in that
- * directory, and will create it with the specified initial mode.
- *
- * HINT: Don't forget to create . and .. while creating a
- * directory.
- */
-/*
- * NOTE: YOU CAN IGNORE THIS METHOD, UNLESS YOU ARE COMPLETING THE 
- *       EXTRA CREDIT PORTION OF THE PROJECT.  IF SO, YOU SHOULD
- *       UN-COMMENT THIS METHOD.
-static int vfs_mkdir(const char *path, mode_t mode) {
-
-  return -1;
-} */
 
 /** Read directory
  *
@@ -215,6 +200,11 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
+  if (strrchr(path, '/') > path) {
+    fprintf(stderr, "Unable to readdir on a multilevel dir");
+    return -1;
+  }
+
     // If the given path is not the root of the file system, throw error
     if (strcmp(path, "/") != 0) {
       return -1;
@@ -229,7 +219,13 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    
+   
+   if (strrchr(path, '/') > path) {
+     fprintf(stderr, "Unable to create on a multilevel dir");
+     return -1;
+   }
+
+ 
     // If the file already exists, throw an error
     struct stat *stbuf = NULL; 
     if (vfs_getattr(path, stbuf) != -ENOENT) {
@@ -254,7 +250,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
                             // Make sure this pointer math is right. It should skip right past
                             // the "/" and start at first char of the path
                             // Note: only works due to single-level directories
-    
+    // TODO need to do stuff with the fatent 
     // Maybe need a call to open()???
     return 0;
 }
@@ -306,14 +302,35 @@ static int vfs_write(const char *path, const char *buf, size_t size,
  */
 static int vfs_delete(const char *path)
 {
-
-  /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
-           AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-    /*if (file dne) {
+   
+    // If the path given is a multilevel path 
+    if (strrchr(path, '/') > path) {
+      fprintf(stderr, "Unable to create on a multilevel dir");
       return -1;
-    }*/
-    // remove file entry from dir
-    // free data blocks used
+    }
+
+    /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
+             AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
+    struct stat *stbuf = NULL; 
+    if (vfs_getattr(path, stbuf) == -ENOENT) {
+      fprintf(stderr, "Can't delete a file that doesn't exist"); 
+      return -EEXIST;
+    }
+
+    int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
+    int i;
+    for (i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) { // May need diff. way to get iterations length
+       if (dirents[i]->valid = 1 && strcmp((path+1), dirents[i]->name) == 0) {
+         found = 1;
+         break;
+       }
+    }
+
+    dirents[i]->valid = 0;
+    // mark the fat entry as unused
+    //TODO maybe works like this?
+    unsigned int tmp = dirents[i]->first_block;
+    fatents[tmp]->used = 0;
 
     return 0;
 }
