@@ -150,8 +150,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  
  int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
  int i;
- for (i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) { // May need diff. way to get iterations length
-   if (dirents[i]->valid = 1 && strcmp((path+1), dirents[i]->name) == 0) {
+ for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
+   if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
      found = 1;
      break;
    }
@@ -162,7 +162,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  } 
  else {
     // if (The path represents the root directory)
-    if (*path == '/') { //if the first char is a '/', it is referencing the root dir
+    if (*path == '/' && *(path + 1) == '\0') { //if the first char is a '/', it is referencing the root dir
       stbuf->st_mode  = 0777 | S_IFDIR;
     } else {
       stbuf->st_mode  = dirents[i]->mode | S_IFREG; 
@@ -226,10 +226,10 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
    
-   if (strrchr(path, '/') > path) {
-     fprintf(stderr, "Unable to create on a multilevel dir");
-     return -1;
-   }
+    if (strrchr(path, '/') > path) {
+      fprintf(stderr, "Unable to create on a multilevel dir");
+      return -1;
+    }
 
  
     // If the file already exists, throw an error
@@ -237,26 +237,52 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     if (vfs_getattr(path, stbuf) != -ENOENT) {
        return -EEXIST;
     }
+    
+    int i;
+    int full = 1;
+    for (i=0; i < disk_vcb->de_length; i++){
+      if (dirents[i]->valid == 0) {
+        full = 0;
+        break;
+      }
+    }
 
-    // Create a new dirent for this file 
-    dirent* new_de = calloc(1, sizeof(dirent)); // maybe don't need to calloc it
-    new_de->valid = 1;
-    new_de->mode = mode;
-    new_de->user = geteuid();
-    new_de->group = getegid();
-    // new_de->size = ???
-    // new_de->first_block = ???
+    if (full == 1) {
+      fprintf(stderr, "There are no more available dirents");
+      return -1;
+    }
+    
+    // Find an invalid dirent for this new file
+    dirents[i]->valid = 1;
+    dirents[i]->mode = mode;
+    dirents[i]->user = geteuid();
+    dirents[i]->group = getegid();
+    // dirents[i]->size = ???
+    // dirents[i]->first_block = ???
     struct timespec mytime;
     clock_gettime(CLOCK_REALTIME, &mytime);
-    new_de->create_time = mytime;
-    new_de->modify_time = mytime;
-    new_de->access_time = mytime;
-    strcpy(new_de->name, (path + 1));
-    //new_de.name = "I'manewfile";//(path + 1); // probably need to parse the path, get the actual name
-                            // Make sure this pointer math is right. It should skip right past
-                            // the "/" and start at first char of the path
-                            // Note: only works due to single-level directories
-    // TODO need to do stuff with the fatent 
+    dirents[i]->create_time = mytime;
+    dirents[i]->modify_time = mytime;
+    dirents[i]->access_time = mytime;
+    strcpy(dirents[i]->name, path);
+    
+    // TODO need to do stuff with the fatent
+    full = 1;
+    for(i=0; i < disk_vcb->fat_length; i++) {
+      if (fatents[i]->used == 0) {
+        full = 0;
+        break;
+      }
+    }
+
+    if (full == 1) {
+      fprintf(stderr, "All fatents are used");
+      return -1;
+    } else {
+      fatents[i]->used = 1;
+      fatents[i]->eof = 1; //TODO verify that this should be correct upon creation
+    }
+
     // Maybe need a call to open()???
     return 0;
 }
