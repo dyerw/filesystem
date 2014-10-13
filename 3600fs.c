@@ -79,22 +79,28 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   if (disk_vcb->magic != 666) { fprintf(stderr, "magic number mismatch\n"); exit(1); }
  
   // Get Directory Entries
+  // Start reading blocks at the dirent start, until the start + the length
   for (int i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) {
-    char* dirent_buf;
+    // Read the block off the disk into a character buffer
+    char dirent_buf[BLOCKSIZE];
     if (dread(i, dirent_buf) < 0) { fprintf(stderr, "dread failed\n"); }
-    dirent* tmp = calloc(1, sizeof(dirent));
-    memcpy(tmp, dirent_buf, sizeof(dirent));
 
+    // Move the character buffer into a dirent struct
+    dirent* tmp = calloc(1, sizeof(dirent));
+    memcpy(tmp, &dirent_buf, sizeof(dirent));
+
+    // Place that struct into the global array
+    // i - disk_vcb->de_start + 1 is the amount of entries in the array
     dirents = realloc(dirents, (i - disk_vcb->de_start + 1) * sizeof(dirent*));
     dirents[i - disk_vcb->de_start] = tmp;
   }  
 
   // Get FAT Entries
   for (int j = disk_vcb->fat_start; j < disk_vcb->fat_start + disk_vcb->fat_length; j++) {
-    char* fat_buf;
+    char fat_buf[BLOCKSIZE];
     if (dread(j, fat_buf) < 0) { fprintf(stderr, "dread failed\n"); }
     fatent* fat_tmp = calloc(1, sizeof(fatent));
-    memcpy(fat_tmp, fat_buf, sizeof(fatent));
+    memcpy(fat_tmp, &fat_buf, sizeof(fatent));
 
     fatents = realloc(fatents, (j - disk_vcb->fat_start + 1) * sizeof(fatent*));
     fatents[j - disk_vcb->fat_start] = fat_tmp;
