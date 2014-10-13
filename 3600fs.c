@@ -61,12 +61,12 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
            AND LOAD ANY DATA STRUCTURES INTO MEMORY */
 
   // Get VCB Data
-  char* vcb_data;
+  char vcb_data[BLOCKSIZE];
   if (dread(0, vcb_data) < 0) { fprintf(stderr, "dread failed for block 0\n"); }
 
   // Cast our data from disk into a vcb structure
   disk_vcb = calloc(1, sizeof(vcb));
-  memcpy(disk_vcb, vcb_data, sizeof(vcb));
+  memcpy(disk_vcb, &vcb_data, sizeof(vcb));
 
   printf("MAGIC: %i\n", disk_vcb->magic); 
   printf("BLOCKSIZE: %i\n", disk_vcb->blocksize); 
