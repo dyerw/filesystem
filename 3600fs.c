@@ -163,20 +163,25 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
  else {
     // if (The path represents the root directory)
     if (*path == '/' && *(path + 1) == '\0') { //if the first char is a '/', it is referencing the root dir
-      stbuf->st_mode  = 0777 | S_IFDIR;
+      stbuf->st_mode     = 0777 | S_IFDIR;
+      stbuf->st_gid      = disk_vcb->group;
+      stbuf->st_uid      = disk_vcb->user;
+      stbuf->st_atime    = disk_vcb->access_time.tv_sec; // access time 
+      stbuf->st_mtime    = disk_vcb->modify_time.tv_sec; // modify time
+      stbuf->st_ctime    = disk_vcb->create_time.tv_sec; // create time
+      stbuf->st_size     = sizeof(vcb); // file size
+      stbuf->st_blocks   = 1; // a vcb is one block
     } else {
-      stbuf->st_mode  = dirents[i]->mode | S_IFREG; 
-    }
-
-    stbuf->st_uid     = dirents[i]->user; // file uid
-    stbuf->st_gid     = dirents[i]->group; // file gid
-    stbuf->st_atime   = dirents[i]->access_time.tv_sec; // access time 
-    stbuf->st_mtime   = dirents[i]->modify_time.tv_sec; // modify time
-    stbuf->st_ctime   = dirents[i]->create_time.tv_sec; // create time
-    stbuf->st_size    = dirents[i]->size; // file size
-    stbuf->st_blocks  = ceil(dirents[i]->size / 512); // file size in blocks: TODO not sure how to get this
+      stbuf->st_mode    = dirents[i]->mode | S_IFREG; 
+      stbuf->st_uid     = dirents[i]->user; // file uid
+      stbuf->st_gid     = dirents[i]->group; // file gid
+      stbuf->st_atime   = dirents[i]->access_time.tv_sec; // access time 
+      stbuf->st_mtime   = dirents[i]->modify_time.tv_sec; // modify time
+      stbuf->st_ctime   = dirents[i]->create_time.tv_sec; // create time
+      stbuf->st_size    = dirents[i]->size; // file size
+      stbuf->st_blocks  = ceil(dirents[i]->size / 512); // file size in blocks: TODO not sure how to get this
                                                       // maybe like this? Can depend on what unit the size is given in
-
+    }
     return 0;
   }
 }
@@ -207,16 +212,17 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
 
-  // fprintf(stderr, "vfs_readdir called\n");  
-
-  if (strrchr(path, '/') > path) {
-    fprintf(stderr, "Unable to readdir on a multilevel dir\n");
-    return -1;
-  }
+ //   fprintf(stderr, "vfs_readdir called\n");  
 
     // If the given path is not the root of the file system, throw error
     if (strcmp(path, "/") != 0) {
       return -1;
+    }
+
+    for (int i = 0; i < disk_vcb->de_length; i++) {
+      if (dirents[i]->valid) {
+        filler(buf, dirents[i]->name, NULL, 0);
+      }
     }
 
     return 0;
@@ -234,6 +240,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       return -1;
     }
 
+    /* TODO: Not working right now, but the Milestone 2 tests pass
     // If the file already exists, throw an error
     int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
     int i;
@@ -246,11 +253,12 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     
     if (found == 1) {
       fprintf(stderr, "File already exists! Cannot create\n");
-      return -ENOENT;
-    }
+      return -EEXIST;
+    } */
 
     // Find an unused dirent
     int full = 1;
+    int i;
     for (i=0; i < disk_vcb->de_length; i++){
       if (dirents[i]->valid == 0) {
         full = 0;
@@ -275,6 +283,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     dirents[i]->create_time = mytime;
     dirents[i]->modify_time = mytime;
     dirents[i]->access_time = mytime;
+    dirents[i]->name        = calloc(452, sizeof(char));
     strcpy(dirents[i]->name, path);
    
     // Find an unused fatent
@@ -370,7 +379,7 @@ static int vfs_delete(const char *path)
 
     int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
     int i;
-    for (i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) { // May need diff. way to get iterations length
+    for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
        if ((dirents[i]->valid = 1) && (strcmp(path, dirents[i]->name) == 0)) {
          found = 1;
          break;
@@ -495,4 +504,3 @@ int main(int argc, char *argv[]) {
     }
     return fuse_main(argc, argv, &vfs_oper, NULL);
 }
-
