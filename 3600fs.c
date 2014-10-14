@@ -138,7 +138,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   fprintf(stderr, "vfs_getattr called\n");
   
   if (strrchr(path, '/') > path) {
-    fprintf(stderr, "Unable to get_attr on a multilevel dir");
+    fprintf(stderr, "Unable to get_attr on a multilevel dir\n");
   }
 
   // Do not mess with this code 
@@ -206,8 +206,11 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
+
+  // fprintf(stderr, "vfs_readdir called\n");  
+
   if (strrchr(path, '/') > path) {
-    fprintf(stderr, "Unable to readdir on a multilevel dir");
+    fprintf(stderr, "Unable to readdir on a multilevel dir\n");
     return -1;
   }
 
@@ -225,20 +228,28 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-   
+    fprintf(stderr, "vfs_create called\n");  
     if (strrchr(path, '/') > path) {
-      fprintf(stderr, "Unable to create on a multilevel dir");
+      fprintf(stderr, "Unable to create on a multilevel dir\n");
       return -1;
     }
 
- 
     // If the file already exists, throw an error
-    struct stat *stbuf = NULL; 
-    if (vfs_getattr(path, stbuf) != -ENOENT) {
-       return -EEXIST;
+    int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
+    int i;
+    for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
+      if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
+        found = 1;
+        break;
+      }
     }
     
-    int i;
+    if (found == 1) {
+      fprintf(stderr, "File already exists! Cannot create\n");
+      return -ENOENT;
+    }
+
+    // Find an unused dirent
     int full = 1;
     for (i=0; i < disk_vcb->de_length; i++){
       if (dirents[i]->valid == 0) {
@@ -247,26 +258,27 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       }
     }
 
+    // Throw error if all dirents full
     if (full == 1) {
-      fprintf(stderr, "There are no more available dirents");
+      fprintf(stderr, "There are no more available dirents\n");
       return -1;
     }
     
-    // Find an invalid dirent for this new file
+    // Fill an invalid dirent for this new file
     dirents[i]->valid = 1;
     dirents[i]->mode = mode;
     dirents[i]->user = geteuid();
     dirents[i]->group = getegid();
-    // dirents[i]->size = ???
-    // dirents[i]->first_block = ???
+    dirents[i]->size = 0;
     struct timespec mytime;
     clock_gettime(CLOCK_REALTIME, &mytime);
     dirents[i]->create_time = mytime;
     dirents[i]->modify_time = mytime;
     dirents[i]->access_time = mytime;
     strcpy(dirents[i]->name, path);
-    
-    // TODO need to do stuff with the fatent
+   
+    // Find an unused fatent
+    int tmp = i;
     full = 1;
     for(i=0; i < disk_vcb->fat_length; i++) {
       if (fatents[i]->used == 0) {
@@ -275,15 +287,16 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       }
     }
 
+    // If no fatents left, throw error. Otherwise, set the unused as used
     if (full == 1) {
-      fprintf(stderr, "All fatents are used");
+      fprintf(stderr, "All fatents are used\n");
       return -1;
     } else {
+      dirents[tmp]->first_block = i;
       fatents[i]->used = 1;
       fatents[i]->eof = 1; //TODO verify that this should be correct upon creation
     }
 
-    // Maybe need a call to open()???
     return 0;
 }
 
@@ -303,7 +316,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
-
+  //  fprintf(stderr, "vfs_read called\n");  
+    
     return 0;
 }
 
@@ -324,6 +338,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
+ // fprintf(stderr, "vfs_write called\n");  
+    
 
   return 0;
 }
@@ -334,28 +350,36 @@ static int vfs_write(const char *path, const char *buf, size_t size,
  */
 static int vfs_delete(const char *path)
 {
-   
+    fprintf(stderr, "vfs_delete called\n");  
+    
+
     // If the path given is a multilevel path 
     if (strrchr(path, '/') > path) {
-      fprintf(stderr, "Unable to create on a multilevel dir");
+      fprintf(stderr, "Unable to create on a multilevel dir\n");
       return -1;
     }
 
     /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
              AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
+    /*
     struct stat *stbuf = NULL; 
     if (vfs_getattr(path, stbuf) == -ENOENT) {
-      fprintf(stderr, "Can't delete a file that doesn't exist"); 
+      fprintf(stderr, "Can't delete a file that doesn't exist\n"); 
       return -EEXIST;
-    }
+    } */
 
     int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
     int i;
     for (i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) { // May need diff. way to get iterations length
-       if (dirents[i]->valid = 1 && strcmp((path+1), dirents[i]->name) == 0) {
+       if ((dirents[i]->valid = 1) && (strcmp(path, dirents[i]->name) == 0)) {
          found = 1;
          break;
        }
+    }
+
+    if (found == 0) {
+      fprintf(stderr, "Can't delete file that doesn't exist\n");
+      return -EEXIST;
     }
 
     dirents[i]->valid = 0;
@@ -376,6 +400,8 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
+   // fprintf(stderr, "vfs_rename called\n");  
+    
 
     return 0;
 }
@@ -392,7 +418,8 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-
+   // fprintf(stderr, "vfs_chmod called\n");  
+    
     return 0;
 }
 
@@ -403,7 +430,8 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-
+   // fprintf(stderr, "vfs_chown called\n");  
+    
     return 0;
 }
 
@@ -413,7 +441,8 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
-
+   // fprintf(stderr, "vfs_utimens called\n");  
+    
     return 0;
 }
 
@@ -427,7 +456,8 @@ static int vfs_truncate(const char *file, off_t offset)
 
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
-
+  //  fprintf(stderr, "vfs_truncate called\n");  
+    
     return 0;
 }
 
