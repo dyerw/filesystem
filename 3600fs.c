@@ -145,7 +145,7 @@ static void vfs_unmount (void *private_data) {
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
   // I think this is supposed to be removed? 
-  fprintf(stderr, "vfs_getattr called\n");
+  // fprintf(stderr, "vfs_getattr called\n");
   
   if (strrchr(path, '/') > path) {
     fprintf(stderr, "Unable to get_attr on a multilevel dir\n");
@@ -297,9 +297,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     dirents[i]->create_time = mytime;
     dirents[i]->modify_time = mytime;
     dirents[i]->access_time = mytime;
-    dirents[i]->name        = calloc(452, sizeof(char));
-    strcpy(dirents[i]->name, path);
-   
+    memcpy(dirents[i]->name, path, strlen(path) + 1);
+
     // Find an unused fatent
     int tmp = i;
     full = 1;
@@ -394,7 +393,7 @@ static int vfs_delete(const char *path)
     int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
     int i;
     for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
-       if ((dirents[i]->valid = 1) && (strcmp(path, dirents[i]->name) == 0)) {
+       if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
          found = 1;
          break;
        }

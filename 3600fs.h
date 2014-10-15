@@ -40,7 +40,7 @@ typedef struct dirent_s {
   struct timespec access_time;
   struct timespec modify_time;
   struct timespec create_time;
-  char* name; // BLOCKSIZE - sizeof(rest of struct)
+  char name[452]; // BLOCKSIZE - sizeof(rest of struct)
 } dirent;
 
 typedef struct fatent_s {
