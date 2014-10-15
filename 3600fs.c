@@ -221,7 +221,11 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     for (int i = 0; i < disk_vcb->de_length; i++) {
       if (dirents[i]->valid) {
-        filler(buf, dirents[i]->name, NULL, 0);
+        if (*dirents[i]->name == '/') {
+          filler(buf, (dirents[i]->name + 1), NULL, 0);
+        } else {
+          filler(buf, dirents[i]->name, NULL, 0);
+        }
       }
     }
 
