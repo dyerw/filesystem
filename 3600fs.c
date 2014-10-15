@@ -118,6 +118,16 @@ static void vfs_unmount (void *private_data) {
            ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
            KEEP DATA CACHED THAT'S NOT ON DISK */
 
+  char tmp_block[BLOCKSIZE];
+  // Write valid dirents back to disk
+  for (int i = 0; i < disk_vcb->de_length; i++) {
+    if (dirents[i]->valid) {
+      memset(tmp_block, 0, BLOCKSIZE);
+      memcpy(tmp_block, dirents[i], sizeof(dirent));
+      dwrite(disk_vcb->de_start + i, tmp_block);
+    }
+  }
+
   // Do not touch or move this code; unconnects the disk
   dunconnect();
 }
