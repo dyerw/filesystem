@@ -128,6 +128,8 @@ static void vfs_unmount (void *private_data) {
     }
   }
 
+  // TODO: Write FAT to disk as well
+
   // Do not touch or move this code; unconnects the disk
   dunconnect();
 }
@@ -255,6 +257,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     }
 
     /* TODO: Not working right now, but the Milestone 2 tests pass
+    // TODO: MAKE THIS WORK
     // If the file already exists, throw an error
     int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
     int i;
@@ -409,7 +412,7 @@ static int vfs_delete(const char *path)
     //TODO maybe works like this?
     unsigned int tmp = dirents[i]->first_block;
     fatents[tmp]->used = 0;
-
+    // TODO: need to do this for all associated FAT blocks
     return 0;
 }
 
