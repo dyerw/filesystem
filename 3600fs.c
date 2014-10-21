@@ -341,7 +341,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     } else {
       // Create a new FAT Block
       current_index = get_new_fatent(fatents, disk_vcb);
-      if (current_index == NULL) return -ENOSPC; // Error check for no more space
+      if (current_index == -1) return -ENOSPC; // Error check for no more space
 
       // Zero out the new block's memory
       /*
@@ -364,8 +364,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // Copy from our buf argument starting at offset % BLOCKSIZE
     // until BLOCKSIZE - (offset % BLOCKSIZE) or size, whichever is larger
     int block_offset = offset % BLOCKSIZE;
-    int start_address = current_buffer + block_offset;
-    int copy_size = BLOCKSIZE - block_offset; // When the data fills the rest of the block
+    char* start_address = current_buffer + block_offset;
+    unsigned int copy_size = BLOCKSIZE - block_offset; // When the data fills the rest of the block
     if (copy_size > size) copy_size = size; // When the data does not fill it
 
     memcpy(start_address, buf, copy_size);
@@ -384,10 +384,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (size > 0) {
       if (!current_block->eof) {
         current_index = current_block->next;
-        current_block = dirents[current_index];
+        current_block = fatents[current_index];
       } else {
         current_index = get_new_fatent(fatents, disk_vcb);
-        if (current_index == NULL) return -ENOSPC;
+        if (current_index == -1) return -ENOSPC;
         current_block->next = current_index;
         current_block->eof = 0;
         current_block = fatents[current_index];

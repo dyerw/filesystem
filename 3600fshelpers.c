@@ -40,7 +40,7 @@ int get_new_fatent(fatent** fatents, vcb* disk_vcb) {
     }
   }
 
-  if (!found) return NULL;
+  if (!found) return -1;
 
   fatents[i]->used = 1;
   fatents[i]->eof = 1;
