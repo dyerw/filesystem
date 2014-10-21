@@ -1,16 +1,16 @@
 #include "3600fshelpers.h"
 
 /*
- * Find the index of a dirent with the given path.
- * Return -ENOENT if it does not exist
- * Otherwise return the index
+ * Find a dirent with the given path.
+ * If found, return a pointer to that dirent
+ * Otherwise return a NULL pointer
  */
 
-dirent* find_dirent(dirent** dirents, const char* path, int de_length) { // Valid is whether you are looking for a valid or invalid dirent
+dirent* find_dirent(dirent** dirents, const char* path, int de_length) {
   int found = 0;
   int i;
 
-  for (i = 0; i < de_length; i++) { // May need diff. way to get iterations length
+  for (i = 0; i < de_length; i++) {
     if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
        found = 1;
        break;

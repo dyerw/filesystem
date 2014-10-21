@@ -147,8 +147,8 @@ static void vfs_unmount (void *private_data) {
  *
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
-  // I think this is supposed to be removed? 
-  // fprintf(stderr, "vfs_getattr called\n");
+  // I think this is supposed to be removed?
+  /*fprintf(stderr, "vfs_getattr called\n"); */
   
   if (strrchr(path, '/') > path) {
     fprintf(stderr, "Unable to get_attr on a multilevel dir\n");
