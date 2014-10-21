@@ -300,9 +300,35 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
-  //  fprintf(stderr, "vfs_read called\n");  
+  fprintf(stderr, "vfs_read called\n");  
     
-    return 0;
+  // Get this file's directory entry
+  dirent* f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
+  if (f_dirent == NULL) return -ENOENT; // Error check for can't find file
+
+  // Get the correct Fat Entry for the given offset
+  int current_index = get_fatent_from_offset(f_dirent->first_block, offset);
+  fatent* current_block = fatents[current_index];
+
+  // Read from the disk until we've satisfied the given size
+  while (size > 0) {
+    char current_buffer[BLOCKSIZE];
+
+    // Get the current block into memory
+    dread(disk_vcb->db_start, current_buffer);
+
+    // Copy from the current block until the end or the size,
+    // whichever is smaller, starting at the offset % BLOCKSIZE
+    int block_offset = offset % BLOCKSIZE;
+    char* start_address = current_buffer + block_offset;
+    int read_size = BLOCKSIZE - block_offset;
+    if (read_size > size) read_size = size;
+
+    memcpy(buf, start_address, read_size);
+
+  } 
+
+  return 0;
 }
 
 /*
@@ -343,7 +369,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     } else {
       // Create a new FAT Block
       current_index = get_new_fatent(fatents, disk_vcb);
-      if (current_index == NULL) return -ENOSPC; // Error check for no more space
+      if (current_index == -1) return -ENOSPC; // Error check for no more space
 
       // Zero out the new block's memory
       /*
@@ -366,7 +392,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // Copy from our buf argument starting at offset % BLOCKSIZE
     // until BLOCKSIZE - (offset % BLOCKSIZE) or size, whichever is larger
     int block_offset = offset % BLOCKSIZE;
-    int start_address = current_buffer + block_offset;
+    char* start_address = current_buffer + block_offset;
     int copy_size = BLOCKSIZE - block_offset; // When the data fills the rest of the block
     if (copy_size > size) copy_size = size; // When the data does not fill it
 
@@ -386,10 +412,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (size > 0) {
       if (!current_block->eof) {
         current_index = current_block->next;
-        current_block = dirents[current_index];
+        current_block = fatents[current_index];
       } else {
         current_index = get_new_fatent(fatents, disk_vcb);
-        if (current_index == NULL) return -ENOSPC;
+        if (current_index == -1) return -ENOSPC;
         current_block->next = current_index;
         current_block->eof = 0;
         current_block = fatents[current_index];
