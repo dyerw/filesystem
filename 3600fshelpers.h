@@ -25,5 +25,6 @@
 #endif
 
 #include "3600fs.h"
+#include "disk.h"
 
 dirent* find_dirent(dirent** des, const char* path, int de_length);

@@ -219,7 +219,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
 
- //   fprintf(stderr, "vfs_readdir called\n");  
+    // fprintf(stderr, "vfs_readdir called\n");  
 
     // If the given path is not the root of the file system, throw error
     if (strcmp(path, "/") != 0) {
@@ -342,7 +342,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
   fprintf(stderr, "vfs_write called\n");
-  
+/*  
   // Get this file's directory entry
   f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
   if (f_dirent == NULL) return -ENOENT; 
@@ -355,7 +355,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   for (int x = offset % 512; x > 0; x--) {
     start_block = start_block->next;    
   }
-
+*/
   return 0;
 }
 
@@ -376,13 +376,6 @@ static int vfs_delete(const char *path)
 
     /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
              AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-    /*
-    struct stat *stbuf = NULL; 
-    if (vfs_getattr(path, stbuf) == -ENOENT) {
-      fprintf(stderr, "Can't delete a file that doesn't exist\n"); 
-      return -EEXIST;
-    } */
-
     dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
 
     // If file DNE
@@ -439,7 +432,7 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-    fprintf(stderr, "vfs_chmod called\n");  
+    //fprintf(stderr, "vfs_chmod called\n");  
    
     dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
     // If file DNE
@@ -459,7 +452,7 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-    fprintf(stderr, "vfs_chown called\n");  
+    //fprintf(stderr, "vfs_chown called\n");  
     dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
     // If file DNE
     if (tmp_de == NULL) {
@@ -478,7 +471,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
-    fprintf(stderr, "vfs_utimens called\n");
+    //fprintf(stderr, "vfs_utimens called\n");
     
     dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
     // If file DNE
@@ -514,8 +507,14 @@ static int vfs_truncate(const char *file, off_t offset)
       return -1;
     }
  
-   // TODO: Fill in the rest
+    // TODO: Fill in the rest
+    /*
     
+
+    */
+    
+
+    tmp_de->size = offset;
     return 0;
 }
 
