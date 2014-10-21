@@ -37,6 +37,7 @@
 
 #include "3600fs.h"
 #include "disk.h"
+#include "3600fshelpers.h"
 
 vcb* disk_vcb;
 dirent** dirents;
@@ -393,24 +394,17 @@ static int vfs_delete(const char *path)
       return -EEXIST;
     } */
 
-    int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
-    int i;
-    for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
-       if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
-         found = 1;
-         break;
-       }
+    dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
+
+    // If file DNE
+    if (tmp_de == NULL) {
+      return -ENOENT;
     }
 
-    if (found == 0) {
-      fprintf(stderr, "Can't delete file that doesn't exist\n");
-      return -EEXIST;
-    }
-
-    dirents[i]->valid = 0;
+    tmp_de->valid = 0;
     // mark the fat entry as unused
     //TODO maybe works like this?
-    unsigned int tmp = dirents[i]->first_block;
+    unsigned int tmp = tmp_de->first_block;
     fatents[tmp]->used = 0;
     // TODO: need to do this for all associated FAT blocks
     return 0;
