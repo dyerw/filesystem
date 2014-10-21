@@ -363,8 +363,20 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
- // fprintf(stderr, "vfs_write called\n");  
-    
+  fprintf(stderr, "vfs_write called\n");
+  
+  // Get this file's directory entry
+  f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
+  if (f_dirent == NULL) return -ENOENT; 
+
+  // Get the start block 
+  start_block = f_dirent->first_block;
+
+  // Move over x blocks, where x is offset % 512
+  // This will give us the block where we want to start writing
+  for (int x = offset % 512; x > 0; x--) {
+    start_block = start_block->next;    
+  }
 
   return 0;
 }
