@@ -160,20 +160,14 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   stbuf->st_blksize = BLOCKSIZE;
 
   /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
+  dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
+
+  // If file DNE
+  if (tmp_de == NULL) {
+    return -ENOENT;
+  }
  
- int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
- int i;
- for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
-   if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
-     found = 1;
-     break;
-   }
- }
- 
- if (found == 0) {
-   return -ENOENT;
- } 
- else {
+  else {
     // if (The path represents the root directory)
     if (*path == '/' && *(path + 1) == '\0') { //if the first char is a '/', it is referencing the root dir
       stbuf->st_mode     = 0777 | S_IFDIR;
@@ -185,14 +179,14 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
       stbuf->st_size     = sizeof(vcb); // file size
       stbuf->st_blocks   = 1; // a vcb is one block
     } else {
-      stbuf->st_mode    = dirents[i]->mode | S_IFREG; 
-      stbuf->st_uid     = dirents[i]->user; // file uid
-      stbuf->st_gid     = dirents[i]->group; // file gid
-      stbuf->st_atime   = dirents[i]->access_time.tv_sec; // access time 
-      stbuf->st_mtime   = dirents[i]->modify_time.tv_sec; // modify time
-      stbuf->st_ctime   = dirents[i]->create_time.tv_sec; // create time
-      stbuf->st_size    = dirents[i]->size; // file size
-      stbuf->st_blocks  = ceil(dirents[i]->size / 512); // file size in blocks: TODO not sure how to get this
+      stbuf->st_mode    = tmp_de->mode | S_IFREG; 
+      stbuf->st_uid     = tmp_de->user; // file uid
+      stbuf->st_gid     = tmp_de->group; // file gid
+      stbuf->st_atime   = tmp_de->access_time.tv_sec; // access time 
+      stbuf->st_mtime   = tmp_de->modify_time.tv_sec; // modify time
+      stbuf->st_ctime   = tmp_de->create_time.tv_sec; // create time
+      stbuf->st_size    = tmp_de->size; // file size
+      stbuf->st_blocks  = ceil(tmp_de->size / 512); // file size in blocks: TODO not sure how to get this
                                                       // maybe like this? Can depend on what unit the size is given in
     }
     return 0;
@@ -256,23 +250,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
       fprintf(stderr, "Unable to create on a multilevel dir\n");
       return -1;
     }
-
-    /* TODO: Not working right now, but the Milestone 2 tests pass
-    // TODO: MAKE THIS WORK
-    // If the file already exists, throw an error
-    int found = 0; // Flag to determine if the file was found. 0 if no, 1 if yes
-    int i;
-    for (i = 0; i < disk_vcb->de_length; i++) { // May need diff. way to get iterations length
-      if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
-        found = 1;
-        break;
-      }
-    }
-    
-    if (found == 1) {
-      fprintf(stderr, "File already exists! Cannot create\n");
-      return -EEXIST;
-    } */
 
     // Find an unused dirent
     int full = 1;
@@ -419,8 +396,8 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
-   // fprintf(stderr, "vfs_rename called\n");  
-    
+    //fprintf(stderr, "vfs_rename called\n");  
+        
 
     return 0;
 }
@@ -437,8 +414,16 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-   // fprintf(stderr, "vfs_chmod called\n");  
-    
+    fprintf(stderr, "vfs_chmod called\n");  
+   
+    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+    // If file DNE
+    if (tmp_de == NULL) {
+      return -ENOENT;
+    }
+
+    tmp_de->mode = mode;
+
     return 0;
 }
 
@@ -449,8 +434,16 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-   // fprintf(stderr, "vfs_chown called\n");  
-    
+    fprintf(stderr, "vfs_chown called\n");  
+    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+    // If file DNE
+    if (tmp_de == NULL) {
+      return -ENOENT;
+    }
+
+    tmp_de->user = uid;
+    tmp_de->group = gid;
+
     return 0;
 }
 
@@ -460,8 +453,17 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
-   // fprintf(stderr, "vfs_utimens called\n");  
+    fprintf(stderr, "vfs_utimens called\n");
     
+    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+    // If file DNE
+    if (tmp_de == NULL) {
+      return -ENOENT;
+    }
+
+    tmp_de->access_time = ts[0];
+    tmp_de->modify_time = ts[1];
+
     return 0;
 }
 
@@ -476,6 +478,18 @@ static int vfs_truncate(const char *file, off_t offset)
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
   //  fprintf(stderr, "vfs_truncate called\n");  
+    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+    // If file DNE
+    if (tmp_de == NULL) {
+      return -ENOENT;
+    }
+
+    if (offset > tmp_de->size) {
+      fprintf(stderr, "Offset is greater than file size. Cannot truncate\n");
+      return -1;
+    }
+ 
+   // TODO: Fill in the rest
     
     return 0;
 }

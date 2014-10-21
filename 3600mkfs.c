@@ -40,6 +40,8 @@ void myformat(int size) {
   myvcb.blocksize = BLOCKSIZE;
   myvcb.de_start = 1;
   myvcb.de_length = ceil(size / 2); //TODO: Need to change this to be more efficient later
+  //myvcb.de_length = 192 / 16; // A DE is 32 bytes, and there are 16 per 512B block. So this file systems should support 192 files now
+  // TODO the issue here is how the dirents are read and written to/from the disk. But this method is the proper way to start
   myvcb.fat_start = myvcb.de_length + 1;
 
   int remaining = size - 1 - myvcb.de_length;

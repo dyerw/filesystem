@@ -20,7 +20,7 @@ dirent* find_dirent(dirent** dirents, const char* path, int de_length) { // Vali
   if (found) {
     return dirents[i];
   } else {
-    fprintf(stderr, "Could not find specificied file");
+    fprintf(stderr, "Could not find specificied file\n");
     return NULL;
   }
 }
