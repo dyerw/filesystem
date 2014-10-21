@@ -397,7 +397,20 @@ static int vfs_delete(const char *path)
 static int vfs_rename(const char *from, const char *to)
 {
     //fprintf(stderr, "vfs_rename called\n");  
-        
+
+    // If the destination path already exists, delete that file
+    dirent* tmp_de_to = find_dirent(dirents, to, disk_vcb->de_length);
+    if (tmp_de_to != NULL) {
+      vfs_delete(to);
+    }
+
+    // If source file DNE
+    dirent* tmp_de_from = find_dirent(dirents, from, disk_vcb->de_length);
+    if (tmp_de_from == NULL) {
+      return -ENOENT;
+    }
+
+    strcpy(tmp_de_from->name, to);
 
     return 0;
 }
