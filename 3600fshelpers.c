@@ -24,3 +24,31 @@ dirent* find_dirent(dirent** dirents, const char* path, int de_length) {
     return NULL;
   }
 }
+
+/*
+ * This function searches an array of fatents to find the next available one,
+ * it then zeroes out the memory in the corresponding data block and returns
+ * the corresponding index into the array of fatents.
+ */
+int get_new_fatent(fatent** fatents, vcb* disk_vcb) {
+  int i;
+  int found = 0;
+  for (i = 0; i < disk_vcb->fat_length; i++) {
+    if (!fatents[i]->used) {
+      found = 1; 
+      break;
+    }
+  }
+
+  if (!found) return NULL;
+
+  fatents[i]->used = 1;
+  fatents[i]->eof = 1;
+
+  // Zero out the data
+  char* zero_buff = calloc(BLOCKSIZE, 1);
+  dwrite(disk_vcb->db_start + i, zero_buff);
+  free(zero_buff);
+
+  return i;
+} 

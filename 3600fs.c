@@ -279,26 +279,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     dirents[i]->modify_time = mytime;
     dirents[i]->access_time = mytime;
     memcpy(dirents[i]->name, path, strlen(path) + 1);
-
-    // Find an unused fatent
-    int tmp = i;
-    full = 1;
-    for(i=0; i < disk_vcb->fat_length; i++) {
-      if (fatents[i]->used == 0) {
-        full = 0;
-        break;
-      }
-    }
-
-    // If no fatents left, throw error. Otherwise, set the unused as used
-    if (full == 1) {
-      fprintf(stderr, "All fatents are used\n");
-      return -1;
-    } else {
-      dirents[tmp]->first_block = i;
-      fatents[i]->used = 1;
-      fatents[i]->eof = 1; //TODO verify that this should be correct upon creation
-    }
+    dirents[i]->first_block = get_new_fatent(fatents, disk_vcb);
 
     return 0;
 }
@@ -342,20 +323,80 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
   fprintf(stderr, "vfs_write called\n");
-/*  
+
   // Get this file's directory entry
-  f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
-  if (f_dirent == NULL) return -ENOENT; 
+  dirent* f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
+  if (f_dirent == NULL) return -ENOENT; // Error check for can't find file
 
   // Get the start block 
-  start_block = f_dirent->first_block;
+  int current_index = f_dirent->first_block;
+  fatent* current_block = fatents[current_index];
 
-  // Move over x blocks, where x is offset % 512
+  // Move over x blocks, where x is offset / 512
   // This will give us the block where we want to start writing
-  for (int x = offset % 512; x > 0; x--) {
-    start_block = start_block->next;    
+  for (int x = offset / BLOCKSIZE - 1; x > 0; x--) {
+    if (!current_block->eof) {
+      current_index = current_block->next;
+      current_block = fatents[current_index];
+    } else {
+      // Create a new FAT Block
+      current_index = get_new_fatent(fatents, disk_vcb);
+      if (current_index == NULL) return -ENOSPC; // Error check for no more space
+
+      // Zero out the new block's memory
+      /*
+      char* zero_buff = calloc(512, 1); // This will have zero'd memory
+      dwrite(disk_vcb->db_start + current_index, zero_buff);
+      */
+
+      current_block->next = current_index;
+      current_block->eof = 0;
+      current_block = fatents[current_index];
+    }    
   }
-*/
+  
+  // Keep writing to blocks until we've written as much as we've been asked
+  while (size > 0) {
+    // Get the current contents of the block we are writing to into a buffer
+    char current_buffer[BLOCKSIZE];
+    dread(disk_vcb->db_start + current_index, current_buffer);
+
+    // Copy from our buf argument starting at offset % BLOCKSIZE
+    // until BLOCKSIZE - (offset % BLOCKSIZE) or size, whichever is larger
+    int block_offset = offset % BLOCKSIZE;
+    int start_address = current_buffer + block_offset;
+    int copy_size = BLOCKSIZE - block_offset; // When the data fills the rest of the block
+    if (copy_size > size) copy_size = size; // When the data does not fill it
+
+    memcpy(start_address, buf, copy_size);
+
+    // We now write the modified block back to disk
+    dwrite(disk_vcb->db_start + current_index, current_buffer);
+ 
+    // We want to start writing in the next block from where we left off
+    buf = buf + copy_size;
+
+    // We want size to reflect that we just wrote some of the buf
+    size = size - copy_size;
+
+    // If this isn't the last block to be written, we must jump to the next FAT Entry
+    // and if it does not exist, get a new one
+    if (size > 0) {
+      if (!current_block->eof) {
+        current_index = current_block->next;
+        current_block = dirents[current_index];
+      } else {
+        current_index = get_new_fatent(fatents, disk_vcb);
+        if (current_index == NULL) return -ENOSPC;
+        current_block->next = current_index;
+        current_block->eof = 0;
+        current_block = fatents[current_index];
+      }
+    }
+  }
+
+  // TODO: Update size metadata
+
   return 0;
 }
 

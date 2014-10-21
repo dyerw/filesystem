@@ -24,7 +24,8 @@
 #include <sys/xattr.h>
 #endif
 
-#include "3600fs.h"
 #include "disk.h"
+#include "3600fs.h"
 
+int get_new_fatent(fatent** fatents, vcb* disk_vcb);
 dirent* find_dirent(dirent** des, const char* path, int de_length);
