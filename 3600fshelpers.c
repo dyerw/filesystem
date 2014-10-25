@@ -51,4 +51,28 @@ int get_new_fatent(fatent** fatents, vcb* disk_vcb) {
   free(zero_buff);
 
   return i;
+}
+
+/* 
+ * This function takes an index into the FAT and an offset and gets the FAT block
+ * that is that many bytes away, creating new blocks along the way if it has to
+ */
+int get_fatent_from_offset(int start_index, int offset, fatent** fatents, vcb* disk_vcb) {
+  fatent* start_block = fatents[start_index];
+  // the offset / BLOCKSIZE will give us the number of blocks to move forward
+  for (int i = offset / BLOCKSIZE; i > 0; i--) {
+    if (!start_block->eof) {
+      start_index = start_block->next;
+      start_block = fatents[start_index];
+    } else {
+      // Create a new FAT Block if there isn't one to move forward to
+      start_index = get_new_fatent(fatents, disk_vcb);
+      if (start_index == -1) return -ENOSPC; // No more space
+      
+      start_block->next = start_index;
+      start_block->eof = 0;
+      start_block = fatents[start_index];
+    }
+  }
+  return start_index;
 } 

@@ -301,13 +301,16 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
   fprintf(stderr, "vfs_read called\n");  
-    
+  
+  // Keep track of the original size  
+  int og_size = size;
+
   // Get this file's directory entry
   dirent* f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
   if (f_dirent == NULL) return -ENOENT; // Error check for can't find file
 
   // Get the correct Fat Entry for the given offset
-  int current_index = get_fatent_from_offset(f_dirent->first_block, offset);
+  int current_index = get_fatent_from_offset(f_dirent->first_block, offset, fatents, disk_vcb);
   fatent* current_block = fatents[current_index];
 
   // Read from the disk until we've satisfied the given size
@@ -324,11 +327,24 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     int read_size = BLOCKSIZE - block_offset;
     if (read_size > size) read_size = size;
 
-    memcpy(buf, start_address, read_size);
+    // Start writing into our buffer argument where we left off
+    // this will be the number of bytes we've read so far or 
+    // original bytes - current bytes
+    char* buff_start = buf + (og_size - size);
+    memcpy(buff_start, start_address, read_size);
+
+    size -= read_size;
+
+    if (current_block->eof) {
+       break;
+    } else {
+      current_index = current_block->next;
+      current_block = fatents[current_index];
+    }
 
   } 
 
-  return 0;
+  return og_size - size;
 }
 
 /*
@@ -350,39 +366,16 @@ static int vfs_write(const char *path, const char *buf, size_t size,
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
   fprintf(stderr, "vfs_write called\n");
 
-
+  int og_size = size;
   
   // Get this file's directory entry
   dirent* f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
   if (f_dirent == NULL) return -ENOENT; // Error check for can't find file
 
   // Get the start block 
-  int current_index = f_dirent->first_block;
-  fatent* current_block = fatents[current_index];
+  int current_index = get_fatent_from_offset(f_dirent->first_block, offset, fatents, disk_vcb); 
+  fatent* current_block = fatents[current_index]; 
 
-  // Move over x blocks, where x is offset / 512
-  // This will give us the block where we want to start writing
-  for (int x = offset / BLOCKSIZE - 1; x > 0; x--) {
-    if (!current_block->eof) {
-      current_index = current_block->next;
-      current_block = fatents[current_index];
-    } else {
-      // Create a new FAT Block
-      current_index = get_new_fatent(fatents, disk_vcb);
-      if (current_index == -1) return -ENOSPC; // Error check for no more space
-
-      // Zero out the new block's memory
-      /*
-      char* zero_buff = calloc(512, 1); // This will have zero'd memory
-      dwrite(disk_vcb->db_start + current_index, zero_buff);
-      */
-
-      current_block->next = current_index;
-      current_block->eof = 0;
-      current_block = fatents[current_index];
-    }    
-  }
-  
   // Keep writing to blocks until we've written as much as we've been asked
   while (size > 0) {
     // Get the current contents of the block we are writing to into a buffer
@@ -407,6 +400,9 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // We want size to reflect that we just wrote some of the buf
     size = size - copy_size;
 
+    // We want to update the offset to write as much further as we just wrote
+    offset = offset + copy_size;
+
     // If this isn't the last block to be written, we must jump to the next FAT Entry
     // and if it does not exist, get a new one
     if (size > 0) {
@@ -423,9 +419,17 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }
   }
 
-  // TODO: Update size metadata
+  // Update size metadata
+  int current_size = f_dirent->size;
+  int new_size;
+  if (offset + og_size > current_size) {
+    new_size = offset + og_size;
+  } else {
+    new_size = current_size;
+  }
+  f_dirent->size = new_size;
 
-  return 0;
+  return og_size;
 }
 
 /**

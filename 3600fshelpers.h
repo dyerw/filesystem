@@ -26,5 +26,6 @@
 
 #include "disk.h"
 #include "3600fs.h"
+int get_fatent_from_offset(int start_block, int offset, fatent** fatents, vcb* disk_vcb);
 int get_new_fatent(fatent** fatents, vcb* disk_vcb);
 dirent* find_dirent(dirent** des, const char* path, int de_length);
