@@ -129,8 +129,6 @@ static void vfs_unmount (void *private_data) {
     }
   }
 
-  // TODO: Write FAT to disk as well
-
   // Do not touch or move this code; unconnects the disk
   dunconnect();
 }
@@ -147,7 +145,6 @@ static void vfs_unmount (void *private_data) {
  *
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
-  // I think this is supposed to be removed?
   /*fprintf(stderr, "vfs_getattr called\n"); */
   
   if (strrchr(path, '/') > path) {
@@ -186,8 +183,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
       stbuf->st_mtime   = tmp_de->modify_time.tv_sec; // modify time
       stbuf->st_ctime   = tmp_de->create_time.tv_sec; // create time
       stbuf->st_size    = tmp_de->size; // file size
-      stbuf->st_blocks  = ceil(tmp_de->size / 512); // file size in blocks: TODO not sure how to get this
-                                                      // maybe like this? Can depend on what unit the size is given in
+      stbuf->st_blocks  = ceil(tmp_de->size / BLOCKSIZE); // file size in blocks
     }
     return 0;
   }
@@ -219,7 +215,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
 
- //   fprintf(stderr, "vfs_readdir called\n");  
+    // fprintf(stderr, "vfs_readdir called\n");  
 
     // If the given path is not the root of the file system, throw error
     if (strcmp(path, "/") != 0) {
@@ -449,13 +445,6 @@ static int vfs_delete(const char *path)
 
     /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
              AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-    /*
-    struct stat *stbuf = NULL; 
-    if (vfs_getattr(path, stbuf) == -ENOENT) {
-      fprintf(stderr, "Can't delete a file that doesn't exist\n"); 
-      return -EEXIST;
-    } */
-
     dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
 
     // If file DNE
@@ -465,10 +454,14 @@ static int vfs_delete(const char *path)
 
     tmp_de->valid = 0;
     // mark the fat entry as unused
-    //TODO maybe works like this?
     unsigned int tmp = tmp_de->first_block;
-    fatents[tmp]->used = 0;
-    // TODO: need to do this for all associated FAT blocks
+    while (!fatents[tmp]->eof) {
+      fatents[tmp]->used = 0;
+      tmp = fatents[tmp]->next;
+    }
+
+    if (fatents[tmp]->eof) fatents[tmp]->used = 0;
+
     return 0;
 }
 
@@ -512,7 +505,7 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-    fprintf(stderr, "vfs_chmod called\n");  
+    //fprintf(stderr, "vfs_chmod called\n");  
    
     dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
     // If file DNE
@@ -532,7 +525,7 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-    fprintf(stderr, "vfs_chown called\n");  
+    //fprintf(stderr, "vfs_chown called\n");  
     dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
     // If file DNE
     if (tmp_de == NULL) {
@@ -551,7 +544,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
-    fprintf(stderr, "vfs_utimens called\n");
+    //fprintf(stderr, "vfs_utimens called\n");
     
     dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
     // If file DNE
@@ -582,13 +575,32 @@ static int vfs_truncate(const char *file, off_t offset)
       return -ENOENT;
     }
 
+    // If offset > file_size, throw an error
     if (offset > tmp_de->size) {
       fprintf(stderr, "Offset is greater than file size. Cannot truncate\n");
       return -1;
     }
- 
-   // TODO: Fill in the rest
+
+    // Mark all fatents (for this file) past the offset fatent to unused
+    int fe_index = get_fatent_from_offset(tmp_de->first_block, offset, fatents, disk_vcb);
+    int i = fe_index;
+    while (!fatents[i]->eof) {
+      i = fatents[i]->next;
+      fatent* fe = fatents[i];
+      fe->used = 0;
+    }
     
+    // Mark the offset block as eof
+    fatents[fe_index]->eof = 1;
+
+    // write the block back to disk with the anything past offset zeroed out
+    char buf[BLOCKSIZE];
+    dread(fe_index, buf);
+    memset(buf + (offset % BLOCKSIZE), 0, BLOCKSIZE - (offset % BLOCKSIZE));
+    dwrite(fe_index, buf);
+    
+    // Set size equal to the offset
+    tmp_de->size = offset;
     return 0;
 }
 
