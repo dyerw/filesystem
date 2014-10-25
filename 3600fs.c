@@ -320,7 +320,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     // whichever is smaller, starting at the offset % BLOCKSIZE
     int block_offset = offset % BLOCKSIZE;
     char* start_address = current_buffer + block_offset;
-    int read_size = BLOCKSIZE - block_offset;
+    unsigned int read_size = BLOCKSIZE - block_offset;
     if (read_size > size) read_size = size;
 
     // Start writing into our buffer argument where we left off
@@ -382,7 +382,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // until BLOCKSIZE - (offset % BLOCKSIZE) or size, whichever is larger
     int block_offset = offset % BLOCKSIZE;
     char* start_address = current_buffer + block_offset;
-    int copy_size = BLOCKSIZE - block_offset; // When the data fills the rest of the block
+    unsigned int copy_size = BLOCKSIZE - block_offset; // When the data fills the rest of the block
     if (copy_size > size) copy_size = size; // When the data does not fill it
 
     memcpy(start_address, buf, copy_size);

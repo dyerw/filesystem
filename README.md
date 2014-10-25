@@ -5,8 +5,6 @@ To Do List
 
 * vfs read
 * vfs write
-* vfs truncate
-* Deal with FAT blocks in delete, unmount, and potentially others
 * Fill in the actual README
 * Optimize to deal with smaller Dirents
 
