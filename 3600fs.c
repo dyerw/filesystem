@@ -334,7 +334,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   // Move over x blocks, where x is offset / 512
   // This will give us the block where we want to start writing
-  for (int x = offset / BLOCKSIZE - 1; x > 0; x--) {
+  for (int x = offset / BLOCKSIZE - 1; x > 0; x--) { // TODO is the -1 a potential issue?
     if (!current_block->eof) {
       current_index = current_block->next;
       current_block = fatents[current_index];
@@ -550,10 +550,24 @@ static int vfs_truncate(const char *file, off_t offset)
  
     // TODO: Fill in the rest
     /*
-    
+     
 
     */
     
+    int fe_index = get_fatent_from_offset();
+    int i = fe_index;
+    while (!fatents[i]->eof || fatents[i] != NULL) {
+      i = fatents[i]->next;
+      fatent* fe = fatents[i];
+      if (fe != NULL) {
+        fe->used = 0;
+      }
+    }
+
+
+    fatents[fe_index]->eof = 1;
+
+    // still need something to free up the old ones
 
     tmp_de->size = offset;
     return 0;

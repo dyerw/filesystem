@@ -29,3 +29,4 @@
 
 int get_new_fatent(fatent** fatents, vcb* disk_vcb);
 dirent* find_dirent(dirent** des, const char* path, int de_length);
+int get_fatent_from_offset(int start_block, fatent** fatents, int offset, vcb* disk_vcb);

@@ -381,6 +381,7 @@ if (length($res) > 0) {
 stopFS();
 unlink($DISK);
 
+=begin
 startSection("Extra credit");
 execute("$MKFS 100000");
 runFS();
@@ -405,6 +406,8 @@ if (! -e $SUBSUBDIR) {
 
 stopFS();
 unlink($DISK);
+=end
+=cut
 
 sub readFile {
   my ($file) = @_;
