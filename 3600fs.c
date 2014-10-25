@@ -314,7 +314,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     char current_buffer[BLOCKSIZE];
 
     // Get the current block into memory
-    dread(disk_vcb->db_start, current_buffer);
+    dread(disk_vcb->db_start + current_index, current_buffer);
 
     // Copy from the current block until the end or the size,
     // whichever is smaller, starting at the offset % BLOCKSIZE
