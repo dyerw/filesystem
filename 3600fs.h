@@ -30,6 +30,7 @@ typedef struct vcb_s {
   struct timespec create_time;
 } vcb;
 
+// Dirents are of size 128B
 typedef struct dirent_s {
   unsigned int valid;
   unsigned int first_block;
@@ -40,7 +41,7 @@ typedef struct dirent_s {
   struct timespec access_time;
   struct timespec modify_time;
   struct timespec create_time;
-  char name[452]; // BLOCKSIZE - sizeof(rest of struct)
+  char name[52]; // 128 - sizeof(rest of struct)
 } dirent;
 
 typedef struct fatent_s {

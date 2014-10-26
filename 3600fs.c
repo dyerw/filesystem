@@ -85,14 +85,18 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     char dirent_buf[BLOCKSIZE];
     if (dread(i, dirent_buf) < 0) { fprintf(stderr, "dread failed\n"); }
 
-    // Move the character buffer into a dirent struct
-    dirent* tmp = calloc(1, sizeof(dirent));
-    memcpy(tmp, &dirent_buf, sizeof(dirent));
+    // Each block contains 4 dirents, copy them all into structs one at a time
+    for(int j = 0; j < 4; j++) {
+      // Copy from the offset into a dirent struct
+      dirent* tmp = calloc(1, sizeof(dirent));
+      memcpy(tmp, dirent_buf + (j * sizeof(dirent)), sizeof(dirent));
 
-    // Place that struct into the global array
-    // i - disk_vcb->de_start + 1 is the amount of entries in the array
-    dirents = realloc(dirents, (i - disk_vcb->de_start + 1) * sizeof(dirent*));
-    dirents[i - disk_vcb->de_start] = tmp;
+      // Place that struct into the global array
+      int current_dirent_blocks = i - disk_vcb->de_start + 1;
+      int current_elements = current_dirent_blocks * 4 + j;
+      dirents = realloc(dirents, current_elements * sizeof(dirent*));
+      dirents[i - disk_vcb->de_start] = tmp;
+    }
   }  
 
   // Get FAT Entries
