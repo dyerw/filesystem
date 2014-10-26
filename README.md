@@ -1,29 +1,110 @@
-README
-
-To Do List
-=================
-
-* vfs read
-* vfs write
-* Fill in the actual README
-* Optimize to deal with smaller Dirents
+Project 2: User-Level File System (FAT Implementation)
+Written by Adam Olgin and William Dyer
 
 Our Approach
-=============
+============
 * Our file system is a single-level directory implementation of a FAT File System
+* We make use of global variables in 3600fs in order to have a consistent pointer to the vcb, dirents, and fatents
+* We have broken out some helper functions into 3600fshelpers.c
+* This implementation uses FUSE version 2.6.
+
+
+Using the Make File
+===================
+
+* 3600fs and 3600mkfs may be compiled by running
+
+  make
+
+
+* Tests may be run by running. Note that this will also compile the code and format disks.
+
+  make test
+
+
+* In order to clean-up all associated executables and logs, run
+
+  make squeaky
+
+
+How to Use this File System
+===========================
+
+You should first compile everything by running
+
+make
+
+You should then create the disk by running
+
+./3600mkfs <disksize>
+
+This will create a empty, formatted disk of size <disksize> bytes
+
+
+Finally, you'll attach your disk to the real filesystem by running
+
+./3600fs -s -d <fuse-dir>
+
+This will make your disk appear mounted at the local fuse-dir directory (the
+actual directory and its contents will be hidden as long as your process
+is running).  Any file operations (create/delete files, read/write data will
+be redirected to the various vfs functions in the 3600fs.c file).
+
+In order to navigate and use the file system, 
+you must open up another terminal and access it through there.
+Debugging information will show up in the original terminal
+that you are running the file system in.
+
+In order to unmount the filesystem, make sure you are not in <fuse-dir>.
+Then, run
+
+fusermount -u <fuse-dir>
+
+
+Using the Make File
+===================
+
+* 3600fs and 3600mkfs may be compiled by running
+
+  make
+
+
+* Tests may be run by running
+
+  make test
+
+
+* In order to clean-up all associated executables and logs, run
+
+  make squeaky
+
 
 Challenges Faced
-==================
-
+================
+* I/0 Error when using readdir
+* I/0 Error when reading/writing
+* Many 'X's showing up at the end of file when reading
+* Optimizing the file system
 
 
 Features/Properties
 ===================
 * Support for up to 150 files // Depending on how the implementation goes, need to change this
-* Ability to mount a file system and then create, read from, write to, and delete files. 
-* Blah blah blah 
+* Ability to mount a file system and then create, read from, write to, move/rename, and delete files. 
+* Currently is only a single-level directory file system. There is no multi-level directory support.
+* File names may be up to 452 characters in length
+* Files may be of arbitrary size (up to the size of the total space available for storage) 
+* Basic file metadata (i.e. owner, group, permissions, filesize, create/modify/access times, etc.) supported
+* Uses a blocksize of 512 bytes
 
 
 Testing
-=========
-We tested our code using fprintf statements in each function so we could so when each function was called. We also used gdb while running specific commands so as to run through how our functions were actually working. Lastly, we used the supplied test script to check whether we were passing the required tests or not.
+=======
+We tested our code using fprintf statements in each function 
+so we could so when each function was called. 
+
+We also used gdb while running specific commands 
+so as to run through how our functions were actually working. 
+
+Lastly, we used the supplied test script to check 
+whether we were passing the required tests or not.
