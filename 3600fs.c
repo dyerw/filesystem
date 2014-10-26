@@ -362,6 +362,9 @@ static int vfs_write(const char *path, const char *buf, size_t size,
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
   fprintf(stderr, "vfs_write called\n");
 
+  // The original values of these variables are necessary
+  // after we modify them during the write
+  int og_offset = offset;
   int og_size = size;
   
   // Get this file's directory entry
@@ -418,8 +421,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   // Update size metadata
   int current_size = f_dirent->size;
   int new_size;
-  if (offset + og_size > current_size) {
-    new_size = offset + og_size;
+  if (og_offset + og_size > current_size) {
+    new_size = og_offset + og_size;
   } else {
     new_size = current_size;
   }
