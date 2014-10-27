@@ -201,9 +201,9 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
       get_dirent(i, tmp, disk_vcb);
       if (tmp->valid) {
         if (tmp->name[0] == '/') {
-          filler(buf, (tmp[0]->name + 1), NULL, 0);
+          filler(buf, (tmp->name + 1), NULL, 0);
         } else {
-          filler(buf, tmp[0]->name, NULL, 0);
+          filler(buf, tmp->name, NULL, 0);
         }
       }
     }
@@ -226,9 +226,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     // Find an unused dirent
     int full = 1;
     int i;
+    dirent* tmp = alloca(sizeof(dirent));
     for (i=0; i < disk_vcb->de_length; i++){
-      dirent* tmp = alloca(sizeof(dirent));
-      get_dirent(i, tmp); 
+      get_dirent(i, tmp, disk_vcb); 
       if (tmp->valid == 0) {
         full = 0;
         break;

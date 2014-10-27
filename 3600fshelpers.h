@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/statfs.h>
+#include <alloca.h>
 
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>

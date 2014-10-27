@@ -9,7 +9,7 @@ int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
   
   // Loop through dirents, looking for the valid dirent with a matching name
   for (int i = 0; i < disk_vcb->de_length; i++) {
-    dirent* tmp = NULL;
+    dirent* tmp = alloca(sizeof(dirent));
     get_dirent(i, tmp, disk_vcb); 
     if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
        de = tmp;
@@ -83,7 +83,7 @@ void get_block(int index, char* buf) {
   /* get_cached_block(index, buf);
    * if (NULL == buf) {
    */
-   if(dread(index, buf) < 0) { fprinf(stderr, "dread failed for block %i\n", index); }
+   if(dread(index, buf) < 0) { fprintf(stderr, "dread failed for block %i\n", index); }
 }
 
 /* 
