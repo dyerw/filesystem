@@ -162,8 +162,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   stbuf->st_rdev  = 0;
   stbuf->st_blksize = BLOCKSIZE;
 
-  /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
-  dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
+  dirent* tmp_de = alloca(sizeof(dirent));
+  find_dirent_by_name(tmp_de, path, disk_vcb);
 
   // If file DNE
   if (tmp_de == NULL) {

@@ -5,25 +5,23 @@
  * If found, return a pointer to that dirent
  * Otherwise return a NULL pointer
  */
-dirent* find_dirent(dirent** dirents, const char* path, int de_length) {
+int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
   
   int found = 0;
   int i;
 
   // Loop through dirents, looking for the valid dirent with a matching name
   for (i = 0; i < de_length; i++) {
-    if ((dirents[i]->valid == 1) && (strcmp(path, dirents[i]->name) == 0)) {
-       found = 1;
-       break;
+    dirent* tmp;
+    get_dirent(i, tmp, disk_vcb); 
+    if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
+       de = tmp;
+       return 0;
     }
   }
 
-  if (found) {
-    return dirents[i];
-  } else {
-    fprintf(stderr, "Could not find specificied file\n");
-    return NULL;
-  }
+  fprintf(stderr, "Could not find specified file: %s, path"); 
+  return -ENOENT;
 }
 
 /*
@@ -76,4 +74,32 @@ int get_fatent_from_offset(int start_index, int offset, fatent** fatents, vcb* d
     }
   }
   return start_index;
-} 
+}
+
+/*
+ * This function takes a block number and returns the data contents of that block
+ * it then stores that block in a cache from which it will return the data if it
+ * is requested again.
+ */
+void get_block(int index, char* buf) {
+  // TODO: Implement caching.
+  /* get_cached_block(index, buf);
+   * if (NULL == buf) {
+   */
+   if(dread(index, buf) < 0) { fprinf(stderr, "dread failed for block %i\n", index); }
+}
+
+/* This function takes an index for a directory entry and finds that directory entry
+ * on disk. 
+ */
+void get_dirent(int index, dirent* de, vcb* disk_vcb) {
+  // Get the disk number where we will find the directory entry,
+  // note that there are 4 dirents per block
+  int block_index = disk_vcb->de_start + index / 4;
+
+  // Get the block data
+  char block_buffer[BLOCKSIZE];
+  get_block(block_index, block_buffer);
+
+  memcpy(de, block_buffer + (index % 4), sizeof(dirent));
+}
