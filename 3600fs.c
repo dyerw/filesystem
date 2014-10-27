@@ -92,10 +92,10 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
       memcpy(tmp, dirent_buf + (j * sizeof(dirent)), sizeof(dirent));
 
       // Place that struct into the global array
-      int current_dirent_blocks = i - disk_vcb->de_start + 1;
-      int current_elements = current_dirent_blocks * 4 + j;
+      int current_dirent_blocks = i - disk_vcb->de_start;
+      int current_elements = current_dirent_blocks * 4 + j + 1;
       dirents = realloc(dirents, current_elements * sizeof(dirent*));
-      dirents[i - disk_vcb->de_start] = tmp;
+      dirents[current_elements - 1] = tmp;
     }
   }  
 
@@ -126,11 +126,13 @@ static void vfs_unmount (void *private_data) {
   char tmp_block[BLOCKSIZE];
   // Write valid dirents back to disk
   for (int i = 0; i < disk_vcb->de_length; i++) {
-    if (dirents[i]->valid) {
-      memset(tmp_block, 0, BLOCKSIZE);
-      memcpy(tmp_block, dirents[i], sizeof(dirent));
-      dwrite(disk_vcb->de_start + i, tmp_block);
+    memset(tmp_block, 0, BLOCKSIZE);
+    for (int j = 0; j < 4; j++) {
+      if (dirents[(i * 4) + j]->valid) {
+        memcpy(tmp_block + (j * sizeof(dirent)), dirents[(i * 4) + j], sizeof(dirent));
+      }
     }
+    dwrite(disk_vcb->de_start + i, tmp_block);
   }
 
   // Do not touch or move this code; unconnects the disk
