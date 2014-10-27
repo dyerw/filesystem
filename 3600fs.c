@@ -163,12 +163,11 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
   stbuf->st_blksize = BLOCKSIZE;
 
   /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
-  dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
+  dirent* tmp_de = alloca(sizeof(dirent));
+  int b = find_dirent_by_name(tmp_de, path, disk_vcb);
 
   // If file DNE
-  if (tmp_de == NULL) {
-    return -ENOENT;
-  }
+  if (b == -ENOENT) { return b; }
  
   else {
     // if (The path represents the root directory)
@@ -308,8 +307,11 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   int og_size = size;
 
   // Get this file's directory entry
-  dirent* f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
-  if (f_dirent == NULL) return -ENOENT; // Error check for can't find file
+  dirent* tmp_de = alloca(sizeof(dirent));
+  int b = find_dirent_by_name(tmp_de, path, disk_vcb);
+
+  // If file DNE
+  if (b == -ENOENT) { return b; }
 
   // Get the correct Fat Entry for the given offset
   int current_index = get_fatent_from_offset(f_dirent->first_block, offset, fatents, disk_vcb);
@@ -374,8 +376,11 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   int og_size = size;
   
   // Get this file's directory entry
-  dirent* f_dirent = find_dirent(dirents, path, disk_vcb->de_length);
-  if (f_dirent == NULL) return -ENOENT; // Error check for can't find file
+  dirent* tmp_de = alloca(sizeof(dirent));
+  int b = find_dirent_by_name(tmp_de, path, disk_vcb);
+
+  // If file DNE
+  if (b == -ENOENT) { return b; }
 
   // Get the start block 
   int current_index = get_fatent_from_offset(f_dirent->first_block, offset, fatents, disk_vcb); 
@@ -454,12 +459,12 @@ static int vfs_delete(const char *path)
 
     /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
              AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-    dirent* tmp_de = find_dirent(dirents, path, disk_vcb->de_length);
+    
+    dirent* tmp_de = alloca(sizeof(dirent));
+    int b = find_dirent_by_name(tmp_de, path, disk_vcb);
 
     // If file DNE
-    if (tmp_de == NULL) {
-      return -ENOENT;
-    }
+    if (b == -ENOENT) { return b; }
 
     tmp_de->valid = 0;
     // mark the fat entry as unused
@@ -484,18 +489,21 @@ static int vfs_delete(const char *path)
 static int vfs_rename(const char *from, const char *to)
 {
     //fprintf(stderr, "vfs_rename called\n");  
-
+    
     // If the destination path already exists, delete that file
-    dirent* tmp_de_to = find_dirent(dirents, to, disk_vcb->de_length);
-    if (tmp_de_to != NULL) {
-      vfs_delete(to);
-    }
+    dirent* tmp_de_to = alloca(sizeof(dirent));
+    int b = find_dirent_by_name(tmp_de, to, disk_vcb);
+
+    // If file exists, delete it
+    if (b == 0) { vfs_delete(to); }
+
 
     // If source file DNE
-    dirent* tmp_de_from = find_dirent(dirents, from, disk_vcb->de_length);
-    if (tmp_de_from == NULL) {
-      return -ENOENT;
-    }
+    dirent* tmp_de_from = alloca(sizeof(dirent));
+    int f = find_dirent_by_name(tmp_de, from, disk_vcb);
+
+    // If file DNE
+    if (b == -ENOENT) { return b; }
 
     strcpy(tmp_de_from->name, to);
 
@@ -515,12 +523,13 @@ static int vfs_rename(const char *from, const char *to)
 static int vfs_chmod(const char *file, mode_t mode)
 {
     //fprintf(stderr, "vfs_chmod called\n");  
-   
-    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+  
+    // If source file DNE
+    dirent* tmp_de = alloca(sizeof(dirent));
+    int b = find_dirent_by_name(tmp_de, file, disk_vcb);
+
     // If file DNE
-    if (tmp_de == NULL) {
-      return -ENOENT;
-    }
+    if (b == -ENOENT) { return b; }
 
     tmp_de->mode = mode;
 
@@ -535,11 +544,13 @@ static int vfs_chmod(const char *file, mode_t mode)
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
     //fprintf(stderr, "vfs_chown called\n");  
-    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+
+    // If source file DNE
+    dirent* tmp_de = alloca(sizeof(dirent));
+    int b = find_dirent_by_name(tmp_de, file, disk_vcb);
+
     // If file DNE
-    if (tmp_de == NULL) {
-      return -ENOENT;
-    }
+    if (b == -ENOENT) { return b; }
 
     tmp_de->user = uid;
     tmp_de->group = gid;
@@ -555,11 +566,12 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
     //fprintf(stderr, "vfs_utimens called\n");
     
-    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+    // If source file DNE
+    dirent* tmp_de = alloca(sizeof(dirent));
+    int b = find_dirent_by_name(tmp_de, file, disk_vcb);
+
     // If file DNE
-    if (tmp_de == NULL) {
-      return -ENOENT;
-    }
+    if (b == -ENOENT) { return b; }
 
     tmp_de->access_time = ts[0];
     tmp_de->modify_time = ts[1];
@@ -578,11 +590,13 @@ static int vfs_truncate(const char *file, off_t offset)
   /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
   //  fprintf(stderr, "vfs_truncate called\n");  
-    dirent* tmp_de = find_dirent(dirents, file, disk_vcb->de_length);
+    
+    // If source file DNE
+    dirent* tmp_de = alloca(sizeof(dirent));
+    int b = find_dirent_by_name(tmp_de, file, disk_vcb);
+
     // If file DNE
-    if (tmp_de == NULL) {
-      return -ENOENT;
-    }
+    if (b == -ENOENT) { return b; }
 
     // If offset > file_size, throw an error
     if (offset > tmp_de->size) {
