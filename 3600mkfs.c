@@ -39,15 +39,22 @@ void myformat(int size) {
   myvcb.magic = 666; 
   myvcb.blocksize = BLOCKSIZE;
   myvcb.de_start = 1;
-  myvcb.de_length = ceil(size / 2); //TODO: Need to change this to be more efficient later
-  //myvcb.de_length = 192 / 16; // A DE is 32 bytes, and there are 16 per 512B block. So this file systems should support 192 files now
-  // TODO the issue here is how the dirents are read and written to/from the disk. But this method is the proper way to start
+  /*
+   * Math explaining variable assignment:
+   * ====================================
+   * n = total - 1 (for vcb)
+   * d = number of dirents
+   * f = number of fatents
+   * x = number of data blocks
+   * n = x + f + (d / 4)
+   * d = x = f
+   * n = d + d + d / 4
+   * n = 2.25 * d 
+   */
+  int num_dirents = floor((size - 1) / 2.25);
+  myvcb.de_length = ceil(num_dirents / 4); // 4 dirents per block
   myvcb.fat_start = myvcb.de_length + 1;
-
-  int remaining = size - 1 - myvcb.de_length;
-  int datablock_length = floor(128 * remaining / 129);
-  
-  myvcb.fat_length = remaining - datablock_length;
+  myvcb.fat_length = num_dirents;
   myvcb.db_start = myvcb.fat_start + myvcb.fat_length;
   myvcb.user = getuid();
   myvcb.group = getgid();
@@ -75,7 +82,10 @@ void myformat(int size) {
   de_init.valid = 0;
 
   memset(tmpmem, 0, BLOCKSIZE);
-  memcpy(tmpmem, &de_init, sizeof(dirent));
+  // Fill the buffer with 4 dirents
+  for (int i = 0; i < 4 ; i ++) {
+    memcpy(tmpmem + i * sizeof(dirent), &de_init, sizeof(dirent));
+  }
 
   // Write out this blank directory entry as many time as we need to
   for (int j = myvcb.de_start; j < myvcb.de_length + myvcb.de_start; j++) {
