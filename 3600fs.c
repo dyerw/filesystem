@@ -40,7 +40,6 @@
 #include "3600fshelpers.h"
 
 vcb* disk_vcb;
-dirent** dirents;
 fatent** fatents;
 
 /*
@@ -77,27 +76,6 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   printf("DB_START: %i\n", disk_vcb->db_start); 
 
   if (disk_vcb->magic != 666) { fprintf(stderr, "magic number mismatch\n"); exit(1); }
- 
-  // Get Directory Entries
-  // Start reading blocks at the dirent start, until the start + the length
-  for (int i = disk_vcb->de_start; i < disk_vcb->de_start + disk_vcb->de_length; i++) {
-    // Read the block off the disk into a character buffer
-    char dirent_buf[BLOCKSIZE];
-    if (dread(i, dirent_buf) < 0) { fprintf(stderr, "dread failed\n"); }
-
-    // Each block contains 4 dirents, copy them all into structs one at a time
-    for(int j = 0; j < 4; j++) {
-      // Copy from the offset into a dirent struct
-      dirent* tmp = calloc(1, sizeof(dirent));
-      memcpy(tmp, dirent_buf + (j * sizeof(dirent)), sizeof(dirent));
-
-      // Place that struct into the global array
-      int current_dirent_blocks = i - disk_vcb->de_start;
-      int current_elements = current_dirent_blocks * 4 + j + 1;
-      dirents = realloc(dirents, current_elements * sizeof(dirent*));
-      dirents[current_elements - 1] = tmp;
-    }
-  }  
 
   // Get FAT Entries
   for (int j = disk_vcb->fat_start; j < disk_vcb->fat_start + disk_vcb->fat_length; j++) {
@@ -123,17 +101,7 @@ static void vfs_unmount (void *private_data) {
            ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
            KEEP DATA CACHED THAT'S NOT ON DISK */
 
-  char tmp_block[BLOCKSIZE];
-  // Write valid dirents back to disk
-  for (int i = 0; i < disk_vcb->de_length; i++) {
-    memset(tmp_block, 0, BLOCKSIZE);
-    for (int j = 0; j < 4; j++) {
-      if (dirents[(i * 4) + j]->valid) {
-        memcpy(tmp_block + (j * sizeof(dirent)), dirents[(i * 4) + j], sizeof(dirent));
-      }
-    }
-    dwrite(disk_vcb->de_start + i, tmp_block);
-  }
+  // Write cached blocks to disk
 
   // Do not touch or move this code; unconnects the disk
   dunconnect();
@@ -229,11 +197,13 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     }
 
     for (int i = 0; i < disk_vcb->de_length; i++) {
-      if (dirents[i]->valid) {
-        if (*dirents[i]->name == '/') {
-          filler(buf, (dirents[i]->name + 1), NULL, 0);
+      dirent* tmp = alloca(sizeof(dirent));
+      get_dirent(i, tmp, disk_vcb);
+      if (tmp->valid) {
+        if (tmp->name[0] == '/') {
+          filler(buf, (tmp[0]->name + 1), NULL, 0);
         } else {
-          filler(buf, dirents[i]->name, NULL, 0);
+          filler(buf, tmp[0]->name, NULL, 0);
         }
       }
     }
@@ -257,7 +227,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     int full = 1;
     int i;
     for (i=0; i < disk_vcb->de_length; i++){
-      if (dirents[i]->valid == 0) {
+      dirent* tmp = alloca(sizeof(dirent));
+      get_dirent(i, tmp); 
+      if (tmp->valid == 0) {
         full = 0;
         break;
       }
@@ -270,18 +242,19 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     }
     
     // Fill an invalid dirent for this new file
-    dirents[i]->valid = 1;
-    dirents[i]->mode = mode;
-    dirents[i]->user = geteuid();
-    dirents[i]->group = getegid();
-    dirents[i]->size = 0;
+    tmp->valid = 1;
+    tmp->mode = mode;
+    tmp->user = geteuid();
+    tmp->group = getegid();
+    tmp->size = 0;
     struct timespec mytime;
     clock_gettime(CLOCK_REALTIME, &mytime);
-    dirents[i]->create_time = mytime;
-    dirents[i]->modify_time = mytime;
-    dirents[i]->access_time = mytime;
-    memcpy(dirents[i]->name, path, strlen(path) + 1);
-    dirents[i]->first_block = get_new_fatent(fatents, disk_vcb);
+    tmp->create_time = mytime;
+    tmp->modify_time = mytime;
+    tmp->access_time = mytime;
+    memcpy(tmp->name, path, strlen(path) + 1);
+    tmp->first_block = get_new_fatent(fatents, disk_vcb);
+    update_dirent(i, tmp, disk_vcb);
 
     return 0;
 }

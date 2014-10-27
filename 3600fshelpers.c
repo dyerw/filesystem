@@ -20,7 +20,7 @@ int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
     }
   }
 
-  fprintf(stderr, "Could not find specified file: %s, path"); 
+  fprintf(stderr, "Could not find specified file: %s", path); 
   return -ENOENT;
 }
 
@@ -95,7 +95,7 @@ void get_block(int index, char* buf) {
 void get_dirent(int index, dirent* de, vcb* disk_vcb) {
   // Get the disk number where we will find the directory entry,
   // note that there are 4 dirents per block
-  int block_index = disk_vcb->de_start + index / 4;
+  int block_index = disk_vcb->de_start + (index / 4);
 
   // Get the block data
   char block_buffer[BLOCKSIZE];
@@ -103,3 +103,20 @@ void get_dirent(int index, dirent* de, vcb* disk_vcb) {
 
   memcpy(de, block_buffer + (index % 4), sizeof(dirent));
 }
+
+/* This function takes an index into the directory entries and a dirent struct
+ * and updates the dirent at that index to the one given.
+ */
+void update_dirent(int index, dirent* de, vcb* disk_vcb) {
+  int block_index = disk_vcb->de_start + (index / 4);
+
+  // Get the block in which the dirent resides
+  char block_buffer[BLOCKSIZE];
+  get_block(block_index, block_buffer);
+
+  // Overwrite the correct dirent
+  memcpy(block_buffer + (index % 4), de, sizeof(dirent));
+
+  // Write the block back to disk
+  write_block(block_index, block_buffer);
+} 
