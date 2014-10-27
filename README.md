@@ -38,7 +38,7 @@ You should then create the disk by running
 
 ./3600mkfs <disksize>
 
-This will create a empty, formatted disk of size <disksize> bytes
+This will create a empty, formatted disk of size <disksize> blocks
 
 
 Finally, you'll attach your disk to the real filesystem by running
@@ -92,7 +92,7 @@ Features/Properties
 * Support for up to 150 files // Depending on how the implementation goes, need to change this
 * Ability to mount a file system and then create, read from, write to, move/rename, and delete files. 
 * Currently is only a single-level directory file system. There is no multi-level directory support.
-* File names may be up to 452 characters in length
+* File names may be up to 52 characters in length
 * Files may be of arbitrary size (up to the size of the total space available for storage) 
 * Basic file metadata (i.e. owner, group, permissions, filesize, create/modify/access times, etc.) supported
 * Uses a blocksize of 512 bytes
