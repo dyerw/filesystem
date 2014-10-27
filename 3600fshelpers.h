@@ -29,4 +29,8 @@
 
 int get_fatent_from_offset(int start_block, int offset, fatent** fatents, vcb* disk_vcb);
 int get_new_fatent(fatent** fatents, vcb* disk_vcb);
-dirent* find_dirent(dirent** des, const char* path, int de_length);
+int find_dirent_by_name(dirent** des, const char* path, int de_length);
+void get_block(int index, char* buf);
+void write_block(int index, char* buf);
+void get_dirent(int index, dirent* de, vcb* disk_vcb);
+void update_dirent(int index, dirent* de, vcb* disk_vcb);

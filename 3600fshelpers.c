@@ -89,6 +89,15 @@ void get_block(int index, char* buf) {
    if(dread(index, buf) < 0) { fprinf(stderr, "dread failed for block %i\n", index); }
 }
 
+/* 
+ * Given an index and a buffer this function pulls that block into the cache if
+ * it needs to and then updates the block with the buffer.
+ */
+void write_block(int index, char* buf) {
+  // TODO: Implement caching
+  if(dwrite(index, buf) < 0) { fprintf(stderr, "dwrite failed for block %i\n", index); }
+}
+
 /* This function takes an index for a directory entry and finds that directory entry
  * on disk. 
  */
