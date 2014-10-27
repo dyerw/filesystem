@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/statfs.h>
+#include <alloca.h>
 
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
@@ -280,8 +281,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   int og_size = size;
 
   // Get this file's directory entry
-  dirent* tmp_de = alloca(sizeof(dirent));
-  int b = find_dirent_by_name(tmp_de, path, disk_vcb);
+  dirent* f_dirent = alloca(sizeof(dirent));
+  int b = find_dirent_by_name(f_dirent, path, disk_vcb);
 
   // If file DNE
   if (b == -ENOENT) { return b; }
@@ -349,8 +350,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   int og_size = size;
   
   // Get this file's directory entry
-  dirent* tmp_de = alloca(sizeof(dirent));
-  int b = find_dirent_by_name(tmp_de, path, disk_vcb);
+  dirent* f_dirent = alloca(sizeof(dirent));
+  int b = find_dirent_by_name(f_dirent, path, disk_vcb);
 
   // If file DNE
   if (b == -ENOENT) { return b; }
@@ -464,11 +465,11 @@ static int vfs_rename(const char *from, const char *to)
     //fprintf(stderr, "vfs_rename called\n");  
     
     // If the destination path already exists, delete that file
-    dirent* tmp_de_to = alloca(sizeof(dirent));
-    int b = find_dirent_by_name(tmp_de, to, disk_vcb);
+    dirent* tmp_de = alloca(sizeof(dirent));
+    int t = find_dirent_by_name(tmp_de, to, disk_vcb);
 
     // If file exists, delete it
-    if (b == 0) { vfs_delete(to); }
+    if (t == 0) { vfs_delete(to); }
 
 
     // If source file DNE
@@ -476,7 +477,7 @@ static int vfs_rename(const char *from, const char *to)
     int f = find_dirent_by_name(tmp_de, from, disk_vcb);
 
     // If file DNE
-    if (b == -ENOENT) { return b; }
+    if (f == -ENOENT) { return f; }
 
     strcpy(tmp_de_from->name, to);
 

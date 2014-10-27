@@ -2,17 +2,14 @@
 
 /*
  * Find a dirent with the given path.
- * If found, return a pointer to that dirent
- * Otherwise return a NULL pointer
+ * If found, fill in the given de with that dirent, and return 0
+ * Otherwise return -ENOENT
  */
 int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
   
-  int found = 0;
-  int i;
-
   // Loop through dirents, looking for the valid dirent with a matching name
-  for (i = 0; i < de_length; i++) {
-    dirent* tmp;
+  for (int i = 0; i < disk_vcb->de_length; i++) {
+    dirent* tmp = NULL;
     get_dirent(i, tmp, disk_vcb); 
     if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
        de = tmp;
