@@ -437,13 +437,12 @@ static int vfs_delete(const char *path)
     
     dirent* tmp_de = alloca(sizeof(dirent));
     int i = find_dirent_by_name(tmp_de, path, disk_vcb);
+    
+    // If file DNE
+    if (i == -ENOENT) { return i; }
+    
     tmp_de->valid = 0;
     update_dirent(i, tmp_de, disk_vcb);
-
-    // If file DNE
-    if (b == -ENOENT) { return b; }
-    tmp_de->valid = 0;
-    update_dirent(b, tmp_de, disk_vcb);
 
     // mark the fat entry as unused
     unsigned int tmp = tmp_de->first_block;

@@ -12,7 +12,7 @@ int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
     dirent* tmp = alloca(sizeof(dirent));
     get_dirent(i, tmp, disk_vcb); 
     if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
-       de = tmp;
+       *de = *tmp;
        return i;
     }
   }
