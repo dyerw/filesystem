@@ -107,7 +107,7 @@ void get_dirent(int index, dirent* de, vcb* disk_vcb) {
   char block_buffer[BLOCKSIZE];
   get_block(block_index, block_buffer);
 
-  memcpy(de, block_buffer + (index % 4), sizeof(dirent));
+  memcpy(de, block_buffer + (index % 4) * sizeof(dirent), sizeof(dirent));
 }
 
 /* This function takes an index into the directory entries and a dirent struct
@@ -121,7 +121,7 @@ void update_dirent(int index, dirent* de, vcb* disk_vcb) {
   get_block(block_index, block_buffer);
 
   // Overwrite the correct dirent
-  memcpy(block_buffer + (index % 4), de, sizeof(dirent));
+  memcpy(block_buffer + (index % 4) * sizeof(dirent), de, sizeof(dirent));
 
   // Write the block back to disk
   write_block(block_index, block_buffer);
