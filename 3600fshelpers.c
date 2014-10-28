@@ -7,13 +7,17 @@
  */
 int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
   
+  int rem_files = disk_vcb->valid_files;
+
   // Loop through dirents, looking for the valid dirent with a matching name
-  for (int i = 0; i < disk_vcb->de_length; i++) {
+  for (int i = 0; i < disk_vcb->de_length && rem_files > 0; i++) {
     dirent* tmp = alloca(sizeof(dirent));
-    get_dirent(i, tmp, disk_vcb); 
+    get_dirent(i, tmp, disk_vcb);
     if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
        *de = *tmp;
        return i;
+    } else if (tmp->valid) {
+      rem_files--;
     }
   }
 
@@ -107,7 +111,7 @@ void get_dirent(int index, dirent* de, vcb* disk_vcb) {
   char block_buffer[BLOCKSIZE];
   get_block(block_index, block_buffer);
 
-  memcpy(de, block_buffer + (index % 4), sizeof(dirent));
+  memcpy(de, block_buffer + (index % 4) * sizeof(dirent), sizeof(dirent));
 }
 
 /* This function takes an index into the directory entries and a dirent struct
@@ -121,7 +125,7 @@ void update_dirent(int index, dirent* de, vcb* disk_vcb) {
   get_block(block_index, block_buffer);
 
   // Overwrite the correct dirent
-  memcpy(block_buffer + (index % 4), de, sizeof(dirent));
+  memcpy(block_buffer + (index % 4) * sizeof(dirent), de, sizeof(dirent));
 
   // Write the block back to disk
   write_block(block_index, block_buffer);
