@@ -7,13 +7,17 @@
  */
 int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
   
+  int rem_files = disk_vcb->valid_files;
+
   // Loop through dirents, looking for the valid dirent with a matching name
-  for (int i = 0; i < disk_vcb->de_length; i++) {
+  for (int i = 0; i < disk_vcb->de_length && rem_files > 0; i++) {
     dirent* tmp = alloca(sizeof(dirent));
-    get_dirent(i, tmp, disk_vcb); 
+    get_dirent(i, tmp, disk_vcb);
     if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
        *de = *tmp;
        return i;
+    } else if (tmp->valid) {
+      rem_files--;
     }
   }
 

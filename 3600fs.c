@@ -193,10 +193,11 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     // If the given path is not the root of the file system, throw error
     if (strcmp(path, "/") != 0) {
-      return -1;
+      return -ENOENT;
     }
-
-    for (int i = 0; i < disk_vcb->de_length; i++) {
+ 
+    int remaining_files = disk_vcb->valid_files;
+    for (int i = 0; (i < disk_vcb->de_length) && (remaining_files > 0); i++) {
       dirent* tmp = alloca(sizeof(dirent));
       get_dirent(i, tmp, disk_vcb);
       if (tmp->valid) {
@@ -205,6 +206,9 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         } else {
           filler(buf, tmp->name, NULL, 0);
         }
+
+        // if the dirent is valid, decrement the value of remaining files
+        remaining_files--;
       }
     }
 
@@ -227,8 +231,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     int full = 1;
     int i;
     dirent* tmp = alloca(sizeof(dirent));
-    for (i=0; i < disk_vcb->de_length; i++){
-      get_dirent(i, tmp, disk_vcb); 
+    for (i = 0; i < disk_vcb->de_length; i++){
+      get_dirent(i, tmp, disk_vcb);
       if (tmp->valid == 0) {
         full = 0;
         break;
@@ -255,6 +259,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     memcpy(tmp->name, path, strlen(path) + 1);
     tmp->first_block = get_new_fatent(fatents, disk_vcb);
     update_dirent(i, tmp, disk_vcb);
+   
+    // Increase the number of valid files on the disk
+    disk_vcb->valid_files++;
 
     return 0;
 }
@@ -452,6 +459,9 @@ static int vfs_delete(const char *path)
     }
 
     if (fatents[tmp]->eof) fatents[tmp]->used = 0;
+    
+    // Decrease the number of valid files on the disk
+    disk_vcb->valid_files--;
 
     return 0;
 }
@@ -484,7 +494,7 @@ static int vfs_rename(const char *from, const char *to)
 
     strcpy(tmp_de_from->name, to);
     update_dirent(f, tmp_de, disk_vcb);
-    
+
     return 0;
 }
 

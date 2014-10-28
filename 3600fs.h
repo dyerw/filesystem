@@ -20,6 +20,7 @@ typedef struct vcb_s {
   int fat_start;
   int fat_length;
   int db_start;
+  int valid_files;
 
   // meta data for root dir
   uid_t user;

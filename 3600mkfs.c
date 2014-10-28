@@ -59,6 +59,7 @@ void myformat(int size) {
   myvcb.user = getuid();
   myvcb.group = getgid();
   myvcb.mode = 0777;
+  myvcb.valid_files = 0;
   
   // Get the current time using the system's clock
   struct timespec tmp_time;
