@@ -28,10 +28,12 @@
 #include "disk.h"
 #include "3600fs.h"
 
-int get_fatent_from_offset(int start_block, int offset, fatent** fatents, vcb* disk_vcb);
-int get_new_fatent(fatent** fatents, vcb* disk_vcb);
+int get_fatent_from_offset(int start_block, int offset, fatent* fe, vcb* disk_vcb);
+int get_new_fatent(fatent* fe, vcb* disk_vcb);
 void get_block(int index, char* buf);
 void write_block(int index, char* buf);
 void get_dirent(int index, dirent* de, vcb* disk_vcb);
 void update_dirent(int index, dirent* de, vcb* disk_vcb);
 int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb);
+void get_fatent(int index, fatent* fe, vcb* disk_vcb);
+void update_fatent(int index, fatent* fe, vcb* disk_vcb);

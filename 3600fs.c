@@ -41,7 +41,6 @@
 #include "3600fshelpers.h"
 
 vcb* disk_vcb;
-fatent** fatents;
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -78,17 +77,7 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 
   if (disk_vcb->magic != 666) { fprintf(stderr, "magic number mismatch\n"); exit(1); }
 
-  // Get FAT Entries
-  for (int j = disk_vcb->fat_start; j < disk_vcb->fat_start + disk_vcb->fat_length; j++) {
-    char fat_buf[BLOCKSIZE];
-    if (dread(j, fat_buf) < 0) { fprintf(stderr, "dread failed\n"); }
-    fatent* fat_tmp = calloc(1, sizeof(fatent));
-    memcpy(fat_tmp, &fat_buf, sizeof(fatent));
-
-    fatents = realloc(fatents, (j - disk_vcb->fat_start + 1) * sizeof(fatent*));
-    fatents[j - disk_vcb->fat_start] = fat_tmp;
-  }
-  return NULL;
+ return NULL;
 }
 
 /*
@@ -105,7 +94,9 @@ static void vfs_unmount (void *private_data) {
   // Write cached blocks to disk
 
   // Write VCB to disk
-  write_block(0, disk_vcb);
+  char vcb_buf[sizeof(vcb)];
+  memcpy(vcb_buf, disk_vcb, sizeof(vcb));
+  write_block(0, vcb_buf);
 
   // Do not touch or move this code; unconnects the disk
   dunconnect();
@@ -260,7 +251,8 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     tmp->modify_time = mytime;
     tmp->access_time = mytime;
     memcpy(tmp->name, path, strlen(path) + 1);
-    tmp->first_block = get_new_fatent(fatents, disk_vcb);
+    fatent* tmp_fe = alloca(sizeof(fatent));
+    tmp->first_block = get_new_fatent(tmp_fe, disk_vcb);
     update_dirent(i, tmp, disk_vcb);
    
     // Increase the number of valid files on the disk
@@ -298,15 +290,15 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
   if (b == -ENOENT) { return b; }
 
   // Get the correct Fat Entry for the given offset
-  int current_index = get_fatent_from_offset(f_dirent->first_block, offset, fatents, disk_vcb);
-  fatent* current_block = fatents[current_index];
+  fatent* current_fe = alloca(sizeof(fatent));
+  int current_index = get_fatent_from_offset(f_dirent->first_block, offset, current_fe, disk_vcb);
 
   // Read from the disk until we've satisfied the given size
   while (size > 0) {
     char current_buffer[BLOCKSIZE];
 
     // Get the current block into memory
-    dread(disk_vcb->db_start + current_index, current_buffer);
+    get_block(disk_vcb->db_start + current_index, current_buffer);
 
     // Copy from the current block until the end or the size,
     // whichever is smaller, starting at the offset % BLOCKSIZE
@@ -323,11 +315,11 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 
     size -= read_size;
 
-    if (current_block->eof) {
+    if (current_fe->eof) {
        break;
     } else {
-      current_index = current_block->next;
-      current_block = fatents[current_index];
+      current_index = current_fe->next;
+      get_fatent(current_index, current_fe, disk_vcb);
     }
 
   } 
@@ -366,15 +358,15 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   // If file DNE
   if (b == -ENOENT) { return b; }
 
-  // Get the start block 
-  int current_index = get_fatent_from_offset(f_dirent->first_block, offset, fatents, disk_vcb); 
-  fatent* current_block = fatents[current_index]; 
+  // Get the start block
+  fatent* current_fe; 
+  int current_index = get_fatent_from_offset(f_dirent->first_block, offset, current_fe, disk_vcb); 
 
   // Keep writing to blocks until we've written as much as we've been asked
   while (size > 0) {
     // Get the current contents of the block we are writing to into a buffer
     char current_buffer[BLOCKSIZE];
-    dread(disk_vcb->db_start + current_index, current_buffer);
+    get_block(disk_vcb->db_start + current_index, current_buffer);
 
     // Copy from our buf argument starting at offset % BLOCKSIZE
     // until BLOCKSIZE - (offset % BLOCKSIZE) or size, whichever is larger
@@ -386,7 +378,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     memcpy(start_address, buf, copy_size);
 
     // We now write the modified block back to disk
-    dwrite(disk_vcb->db_start + current_index, current_buffer);
+    write_block(disk_vcb->db_start + current_index, current_buffer);
  
     // We want to start writing in the next block from where we left off
     buf = buf + copy_size;
@@ -400,15 +392,15 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     // If this isn't the last block to be written, we must jump to the next FAT Entry
     // and if it does not exist, get a new one
     if (size > 0) {
-      if (!current_block->eof) {
-        current_index = current_block->next;
-        current_block = fatents[current_index];
+      if (!current_fe->eof) {
+        current_index = current_fe->next;
+        get_fatent(current_index, current_fe, disk_vcb);
       } else {
-        current_index = get_new_fatent(fatents, disk_vcb);
+        fatent* tmp_fe = current_fe;
+        current_index = get_new_fatent(current_fe, disk_vcb);
         if (current_index == -1) return -ENOSPC;
-        current_block->next = current_index;
-        current_block->eof = 0;
-        current_block = fatents[current_index];
+        tmp_fe->next = current_index;
+        tmp_fe->eof = 0;
       }
     }
   }
@@ -456,12 +448,17 @@ static int vfs_delete(const char *path)
 
     // mark the fat entry as unused
     unsigned int tmp = tmp_de->first_block;
-    while (!fatents[tmp]->eof) {
-      fatents[tmp]->used = 0;
-      tmp = fatents[tmp]->next;
+    fatent* tmp_fe = alloca(sizeof(fatent));
+    get_fatent(tmp, tmp_fe, disk_vcb);
+    while (!tmp_fe->eof) {
+      tmp_fe->used = 0;
+      update_fatent(tmp, tmp_fe, disk_vcb);
+      tmp = tmp_fe->next;
+      get_fatent(tmp_fe->next, tmp_fe, disk_vcb);
     }
 
-    if (fatents[tmp]->eof) fatents[tmp]->used = 0;
+    if (tmp_fe->eof) tmp_fe->used = 0;
+    update_fatent(tmp, tmp_fe, disk_vcb);
     
     // Decrease the number of valid files on the disk
     disk_vcb->valid_files--;
@@ -599,22 +596,26 @@ static int vfs_truncate(const char *file, off_t offset)
     }
 
     // Mark all fatents (for this file) past the offset fatent to unused
-    int fe_index = get_fatent_from_offset(tmp_de->first_block, offset, fatents, disk_vcb);
-    int i = fe_index;
-    while (!fatents[i]->eof) {
-      i = fatents[i]->next;
-      fatent* fe = fatents[i];
-      fe->used = 0;
+    fatent* tmp_fe = alloca(sizeof(fatent));
+    int start_i = get_fatent_from_offset(tmp_de->first_block, offset, tmp_fe, disk_vcb);
+    fatent* start = tmp_fe;
+    int i = start_i;
+    while (!tmp_fe->eof) {
+      tmp_fe->used = 0;
+      update_fatent(i, tmp_fe, disk_vcb);
+      i = tmp_fe->next;
+      get_fatent(tmp_fe->next, tmp_fe, disk_vcb);
     }
     
     // Mark the offset block as eof
-    fatents[fe_index]->eof = 1;
+    start->eof = 1;
+    update_fatent(start_i, start, disk_vcb);
 
     // write the block back to disk with the anything past offset zeroed out
     char buf[BLOCKSIZE];
-    dread(fe_index, buf);
+    get_block(disk_vcb->db_start + start_i, buf);
     memset(buf + (offset % BLOCKSIZE), 0, BLOCKSIZE - (offset % BLOCKSIZE));
-    dwrite(fe_index, buf);
+    write_block(disk_vcb->db_start + start_i, buf);
     
     // Set size equal to the offset
     tmp_de->size = offset;

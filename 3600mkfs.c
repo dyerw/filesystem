@@ -46,15 +46,16 @@ void myformat(int size) {
    * d = number of dirents
    * f = number of fatents
    * x = number of data blocks
-   * n = x + f + (d / 4)
+   * n = x + (f / 16) + (d / 4)
    * d = x = f
-   * n = d + d + d / 4
-   * n = 2.25 * d 
+   * n = d + d / 16 + d / 4
+   * n = 1.3125 * d 
    */
-  int num_dirents = floor((size - 1) / 2.25);
-  myvcb.de_length = ceil(num_dirents / 4); // 4 dirents per block
+  int num_db = floor((size - 1) / 1.3125);
+  int fatents_per_block = BLOCKSIZE / sizeof(fatent);
+  myvcb.de_length = ceil(num_db / 4); // 4 dirents per block
   myvcb.fat_start = myvcb.de_length + 1;
-  myvcb.fat_length = num_dirents;
+  myvcb.fat_length = num_db / fatents_per_block;
   myvcb.db_start = myvcb.fat_start + myvcb.fat_length;
   myvcb.user = getuid();
   myvcb.group = getgid();
@@ -100,7 +101,10 @@ void myformat(int size) {
   fe_init.used = 0;
 
   memset(tmpmem, 0, BLOCKSIZE);
-  memcpy(tmpmem, &fe_init, sizeof(fatent));
+  // Create a mem block that has the correct number of blank fatents
+  for (int i = 0; i < BLOCKSIZE / sizeof(fatent); i++) {
+     memcpy(tmpmem, &fe_init + i * sizeof(fatent), sizeof(fatent));
+  }
 
   // Write out fat_length  blank FAT blocks starting at fat_start
   for (int k = myvcb.fat_start; k < myvcb.fat_length + myvcb.fat_start; k++) {
