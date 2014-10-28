@@ -412,6 +412,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     new_size = current_size;
   }
   f_dirent->size = new_size;
+  update_dirent(b, f_dirent, disk_vcb);
 
   return og_size;
 }
@@ -441,8 +442,9 @@ static int vfs_delete(const char *path)
 
     // If file DNE
     if (b == -ENOENT) { return b; }
-
     tmp_de->valid = 0;
+    update_dirent(b, tmp_de, disk_vcb);
+
     // mark the fat entry as unused
     unsigned int tmp = tmp_de->first_block;
     while (!fatents[tmp]->eof) {
@@ -471,7 +473,7 @@ static int vfs_rename(const char *from, const char *to)
     int t = find_dirent_by_name(tmp_de, to, disk_vcb);
 
     // If file exists, delete it
-    if (t == 0) { vfs_delete(to); }
+    if (t >= 0) { vfs_delete(to); }
 
 
     // If source file DNE
@@ -482,7 +484,8 @@ static int vfs_rename(const char *from, const char *to)
     if (f == -ENOENT) { return f; }
 
     strcpy(tmp_de_from->name, to);
-
+    update_dirent(f, tmp_de, disk_vcb);
+    
     return 0;
 }
 
@@ -508,6 +511,7 @@ static int vfs_chmod(const char *file, mode_t mode)
     if (b == -ENOENT) { return b; }
 
     tmp_de->mode = mode;
+    update_dirent(b, tmp_de, disk_vcb);
 
     return 0;
 }
@@ -530,6 +534,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 
     tmp_de->user = uid;
     tmp_de->group = gid;
+    update_dirent(b, tmp_de, disk_vcb);
 
     return 0;
 }
@@ -551,6 +556,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
 
     tmp_de->access_time = ts[0];
     tmp_de->modify_time = ts[1];
+    update_dirent(b, tmp_de, disk_vcb);
 
     return 0;
 }
@@ -600,6 +606,8 @@ static int vfs_truncate(const char *file, off_t offset)
     
     // Set size equal to the offset
     tmp_de->size = offset;
+    update_dirent(b, tmp_de, disk_vcb);
+
     return 0;
 }
 
