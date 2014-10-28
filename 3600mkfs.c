@@ -65,9 +65,9 @@ void myformat(int size) {
   struct timespec tmp_time;
   clock_gettime(CLOCK_REALTIME, &tmp_time);
 
-  struct timespec access_time = tmp_time;
-  struct timespec modify_time = tmp_time;
-  struct timespec create_time = tmp_time;
+  myvcb.access_time = tmp_time;
+  myvcb.modify_time = tmp_time;
+  myvcb.create_time = tmp_time;
 
   // Write to the disk
   char tmpmem[BLOCKSIZE];
