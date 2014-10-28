@@ -104,6 +104,9 @@ static void vfs_unmount (void *private_data) {
 
   // Write cached blocks to disk
 
+  // Write VCB to disk
+  write_block(0, disk_vcb);
+
   // Do not touch or move this code; unconnects the disk
   dunconnect();
 }
