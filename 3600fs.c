@@ -435,7 +435,9 @@ static int vfs_delete(const char *path)
              AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
     
     dirent* tmp_de = alloca(sizeof(dirent));
-    int b = find_dirent_by_name(tmp_de, path, disk_vcb);
+    int i = find_dirent_by_name(tmp_de, path, disk_vcb);
+    tmp_de->valid = 0;
+    update_dirent(i, tmp_de, disk_vcb);
 
     // If file DNE
     if (b == -ENOENT) { return b; }

@@ -2,7 +2,7 @@
 
 /*
  * Find a dirent with the given path.
- * If found, fill in the given de with that dirent, and return 0
+ * If found, fill in the given de with that dirent, and return the index
  * Otherwise return -ENOENT
  */
 int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
@@ -13,7 +13,7 @@ int find_dirent_by_name(dirent* de, const char* path, vcb* disk_vcb) {
     get_dirent(i, tmp, disk_vcb); 
     if ((tmp->valid == 1) && (strcmp(path, tmp->name) == 0)) {
        de = tmp;
-       return 0;
+       return i;
     }
   }
 
