@@ -72,13 +72,17 @@ int get_fatent_from_offset(int start_index, int offset, fatent* fe, vcb* disk_vc
       start_index = start_block->next;
       get_fatent(start_index, start_block, disk_vcb);
     } else {
-      fatent* tmp = start_block;
       // Create a new FAT Block if there isn't one to move forward to
+      int tmp_index = start_index;
+      fatent* tmp = alloca(sizeof(fatent));
+      *tmp = *start_block;
+      
       int start_index = get_new_fatent(start_block, disk_vcb);
       if (start_index == -1) return -ENOSPC; // No more space
-
+       
       tmp->next = start_index;
       tmp->eof = 0;
+      update_fatent(tmp_index, tmp, disk_vcb);
     }
   }
   *fe = *start_block;

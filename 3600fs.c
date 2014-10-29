@@ -359,7 +359,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   if (b == -ENOENT) { return b; }
 
   // Get the start block
-  fatent* current_fe; 
+  fatent* current_fe = alloca(sizeof(fatent)); 
   int current_index = get_fatent_from_offset(f_dirent->first_block, offset, current_fe, disk_vcb); 
 
   // Keep writing to blocks until we've written as much as we've been asked
@@ -396,11 +396,16 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         current_index = current_fe->next;
         get_fatent(current_index, current_fe, disk_vcb);
       } else {
-        fatent* tmp_fe = current_fe;
+        int tmp_ind = current_index;
+        fatent* tmp_fe = alloca(sizeof(fatent));
+        *tmp_fe = *current_fe;
+
         current_index = get_new_fatent(current_fe, disk_vcb);
         if (current_index == -1) return -ENOSPC;
+
         tmp_fe->next = current_index;
         tmp_fe->eof = 0;
+        update_fatent(tmp_ind, tmp_fe, disk_vcb);
       }
     }
   }
